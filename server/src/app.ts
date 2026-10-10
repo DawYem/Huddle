@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import type { Config } from './config.js';
 import { UpstreamError } from './google/errors.js';
 import { locationRouter } from './routes/location.js';
+import { recommendationsRouter } from './routes/recommendations.js';
 import { spotsRouter } from './routes/spots.js';
 
 export function createApp(config: Config, fetchFn: typeof fetch = fetch) {
@@ -25,6 +26,7 @@ export function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   );
   app.use('/api/location', locationRouter(config.googleApiKey, fetchFn));
   app.use('/api/spots', spotsRouter(config.googleApiKey, fetchFn, config.cacheTtlMs));
+  app.use('/api/recommendations', recommendationsRouter(config, fetchFn));
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {
     if (err instanceof UpstreamError) {

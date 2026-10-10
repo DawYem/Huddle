@@ -67,7 +67,7 @@ export function parseSearch(q: Record<string, string | undefined>): SpotSearch |
 }
 
 // Rounding to 3 decimals (~110 m) lets nearby users share cached results.
-function cacheKey(s: SpotSearch): string {
+export function cacheKey(s: SpotSearch): string {
   return [
     s.lat.toFixed(3),
     s.lng.toFixed(3),
