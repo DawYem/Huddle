@@ -29,6 +29,24 @@ Finds places nearby where people can watch a game together.
 
 Returns `{ count, spots: [{ id, name, address, lat, lng, distanceMeters, primaryType, rating, ratingCount, openNow, googleMapsUri }] }`, nearest first.
 
+### `GET /api/recommendations`
+
+Up to 3 watch spots picked for one fan, each with a reason and a Google Maps directions link.
+
+| Param | Default | Notes |
+| --- | --- | --- |
+| `lat`, `lng` | required | The user's position |
+| `team`, `vibe` | none | Up to 40 letters, numbers, spaces or `. ' & -` |
+| `is21` | `false` | Only `true` counts as confirmed 21+ |
+| `radius`, `types`, `q`, `limit` | as `/api/spots` | Passed to the same Places search |
+
+1. Searches Places exactly like `/api/spots` (and caches the same way).
+2. If `is21` isn't `true`, drops bars, pubs, clubs and other alcohol-focused types, plus places with no type, before anything else sees them.
+3. Asks Gemini to rank the remaining places. Gemini may only return ids from that list; anything else is discarded, and reasons that claim a venue is showing a game are replaced with plain facts (we have no showing data).
+4. If `GEMINI_API_KEY` is unset, Gemini fails, or it returns nothing valid, falls back to open-now first, then nearest.
+
+Returns `{ source: "gemini" | "fallback", count, recommendations: [{ ...spot fields, reason, directionsUrl }] }`. `directionsUrl` is a plain [Maps URL](https://developers.google.com/maps/documentation/urls/get-started) (no API key) that starts from the phone's current location.
+
 ### `POST /api/location`
 
 Fallback for devices without a GPS fix. Send the Google Geolocation request body with `wifiAccessPoints` and/or `cellTowers`; returns `{ lat, lng, accuracyMeters }`. IP-based lookup is disabled, since from the server it would locate the server rather than the user. Clients that have GPS (browser `navigator.geolocation`, iOS/Android location) should send coordinates straight to `/api/spots`.

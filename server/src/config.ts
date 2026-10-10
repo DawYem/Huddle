@@ -5,6 +5,9 @@ export interface Config {
   port: number;
   rateLimitPerMinute: number;
   cacheTtlMs: number;
+  // Optional. Without a key, /api/recommendations uses its nearest-open fallback.
+  geminiApiKey?: string;
+  geminiModel?: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -17,5 +20,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: Number(env.PORT ?? 3000),
     rateLimitPerMinute: Number(env.RATE_LIMIT_PER_MINUTE ?? 60),
     cacheTtlMs: Number(env.CACHE_TTL_SECONDS ?? 300) * 1000,
+    geminiApiKey: env.GEMINI_API_KEY || undefined,
+    geminiModel: env.GEMINI_MODEL || 'gemini-3.8-flash',
   };
 }
