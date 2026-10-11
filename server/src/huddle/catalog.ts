@@ -8,10 +8,24 @@ export interface Catalog {
   perks: Perk[];
 }
 
-export function loadCatalog(gamesPath: string, perksPath: string): Catalog {
-  const g = JSON.parse(readFileSync(gamesPath, 'utf8')) as { games: Game[]; teams: Record<string, string[]> };
-  const p = JSON.parse(readFileSync(perksPath, 'utf8')) as { perks: Perk[] };
+export interface GamesFile {
+  games: Game[];
+  teams: Record<string, string[]>;
+}
+
+export interface PerksFile {
+  perks: Perk[];
+}
+
+export function catalogFrom(g: GamesFile, p: PerksFile): Catalog {
   return { games: g.games, teams: g.teams, perks: p.perks };
+}
+
+export function loadCatalog(gamesPath: string, perksPath: string): Catalog {
+  return catalogFrom(
+    JSON.parse(readFileSync(gamesPath, 'utf8')) as GamesFile,
+    JSON.parse(readFileSync(perksPath, 'utf8')) as PerksFile,
+  );
 }
 
 export function gameStart(game: Game): Date {

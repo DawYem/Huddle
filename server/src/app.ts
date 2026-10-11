@@ -20,7 +20,8 @@ export function createApp(
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '100kb' }));
 
-  app.get('/health', (_req, res) => {
+  // /api/health is the public path on Vercel, where only /api/* reaches this service.
+  app.get(['/health', '/api/health'], (_req, res) => {
     res.json({ ok: true });
   });
 

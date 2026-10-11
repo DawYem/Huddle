@@ -2,13 +2,13 @@
   "name": "huddle-server",
   "version": "1.0.0",
   "description": "Huddle backend and iMessage agent: nearby watch spots, game sign-ups, reminders",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/local.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/src/local.js",
     "agent": "tsx src/agent/index.ts",
-    "agent:start": "node dist/agent/index.js",
+    "agent:start": "node dist/src/agent/index.js",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts"
   },

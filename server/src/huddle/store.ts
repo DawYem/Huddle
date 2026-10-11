@@ -13,13 +13,16 @@ interface StoreData {
 // so every call re-reads it and writes it back right away. Fine for a demo;
 // swap for a real database before many fans are writing at once.
 export class Store {
+  // `seed` is a seed file's path, or its already-parsed contents.
   constructor(
     private readonly path: string,
-    seedPath?: string,
+    seed?: string | Partial<StoreData>,
   ) {
     if (!existsSync(path)) {
-      if (seedPath && existsSync(seedPath)) copyFileSync(seedPath, path);
-      else this.write({ fans: [], signups: [], remindersSent: [] });
+      if (typeof seed === 'string' && existsSync(seed)) copyFileSync(seed, path);
+      else if (seed && typeof seed === 'object') {
+        this.write({ fans: seed.fans ?? [], signups: seed.signups ?? [], remindersSent: seed.remindersSent ?? [] });
+      } else this.write({ fans: [], signups: [], remindersSent: [] });
     }
   }
 

@@ -1,14 +1,14 @@
 import type { NextConfig } from "next";
 
-// The Express server in server/ (port 4000 by default). Set HUDDLE_API_URL to
-// point the site at a deployed backend instead.
-const API_URL = process.env.HUDDLE_API_URL ?? "http://localhost:4000";
-
 const nextConfig: NextConfig = {
-  // The browser only ever calls /api/* on the site itself; Next forwards it to
-  // the server, so there is no CORS setup and no backend URL in client code.
+  // Locally, forward /api/* to the Express server in server/ (port 4000), so
+  // the browser only ever calls /api on the site itself: no CORS, no backend
+  // URL in client code. On Vercel this is skipped: vercel.json routes /api/*
+  // to the "server" service before a request ever reaches Next.js.
   async rewrites() {
-    return [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }];
+    if (process.env.VERCEL) return [];
+    const api = process.env.HUDDLE_API_URL ?? "http://localhost:4000";
+    return [{ source: "/api/:path*", destination: `${api}/api/:path*` }];
   },
 };
 

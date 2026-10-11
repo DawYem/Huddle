@@ -1,4 +1,12 @@
-import 'dotenv/config';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { config as loadEnv } from 'dotenv';
+
+// Read server/.env no matter which folder the process starts in (vercel dev
+// starts it from the repo root). On Vercel itself, keys come from the
+// project's Environment Variables instead and no .env file exists.
+const serverDir = fileURLToPath(new URL(import.meta.url.includes('/dist/') ? '../../' : '../', import.meta.url));
+loadEnv({ path: [join(process.cwd(), '.env'), join(serverDir, '.env')], quiet: true });
 import type { SpectrumCredentials } from './photon/users.js';
 
 export interface Config {
