@@ -11,7 +11,7 @@ cp .env.example .env   # add a key with Geolocation API and Places API (New) ena
 npm run dev            # http://localhost:4000
 ```
 
-`npm test` runs the test suite (Google is mocked), `npm run build && npm start` runs the compiled server.
+`npm test` runs the test suite (Google is mocked), `npm run compile && npm start` runs the compiled server. (There is deliberately no `build` script: on Vercel, a `build` script makes Vercel serve our `tsc` output in a layout Node loads as CommonJS; without it Vercel compiles the TypeScript itself.)
 
 ## Endpoints
 

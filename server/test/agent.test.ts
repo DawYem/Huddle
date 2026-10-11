@@ -8,7 +8,7 @@ import { buildIcs, googleCalendarUrl } from '../src/agent/calendar.js';
 import { HuddleAgent, type Reply } from '../src/agent/brain.js';
 import { rankFood, type PlacesFinder } from '../src/agent/places.js';
 import { dueReminders, reminderKey } from '../src/agent/reminders.js';
-import { createApp } from '../src/app.js';
+import { createApp } from '../src/createApp.js';
 import type { WatchSpot } from '../src/google/places.js';
 import { findGame, findTeams, loadCatalog } from '../src/huddle/catalog.js';
 import { Store } from '../src/huddle/store.js';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import request from 'supertest';
-import { createApp } from '../src/app.js';
+import { createApp } from '../src/createApp.js';
 import type { Config } from '../src/config.js';
 import { directionsUrl } from '../src/maps/directions.js';
 import { filterEligible } from '../src/recommendations/eligibility.js';

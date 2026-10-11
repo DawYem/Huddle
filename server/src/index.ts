@@ -1,5 +1,5 @@
 import express from 'express';
-import { createApp } from './app.js';
+import { createApp } from './createApp.js';
 import { loadConfig } from './config.js';
 import { openHuddleData } from './huddle/data.js';
 

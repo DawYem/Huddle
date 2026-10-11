@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import request from 'supertest';
-import { createApp } from '../src/app.js';
+import { createApp } from '../src/createApp.js';
 import { loadCatalog } from '../src/huddle/catalog.js';
 import { toE164 } from '../src/huddle/phone.js';
 import { Store } from '../src/huddle/store.js';

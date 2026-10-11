@@ -5,13 +5,12 @@
   "main": "dist/src/index.js",
   "scripts": {
     "dev": "tsx watch src/local.ts",
-    "build": "tsc",
+    "compile": "tsc",
     "start": "node dist/src/local.js",
     "agent": "tsx src/agent/index.ts",
     "agent:start": "node dist/src/agent/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.ts",
-    "build:vercel": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=dist/vercel/index.mjs"
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
@@ -23,7 +22,6 @@
     "@types/express": "^4.17.25",
     "@types/node": "^22.20.5",
     "@types/supertest": "^6.0.3",
-    "esbuild": "^0.25.10",
     "supertest": "^7.3.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
