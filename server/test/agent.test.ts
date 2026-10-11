@@ -234,3 +234,12 @@ test('YES after several reminders at once adds every offered game', async () => 
     ['huddle-nba-knicks-celtics-1011.ics', 'huddle-epl-arsenal-chelsea-1017.ics'],
   );
 });
+
+test('"Hi Huddle", the text the website pre-fills, gets the welcome', async () => {
+  const agent = agentWith(freshStore());
+  for (const text of ['Hi Huddle', 'hey huddle!', 'hi']) {
+    const replies = texts(await agent.handleMessage('+14045550123', text));
+    assert.doesNotMatch(replies, /didn't get that/, text);
+    assert.match(replies, /I'm Huddle/, text);
+  }
+});

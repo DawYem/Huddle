@@ -27,6 +27,15 @@ function displayNumber(e164: string): string {
   return us ? `(${us[1]}) ${us[2]}-${us[3]}` : e164;
 }
 
+const FIRST_TEXT = "Hi Huddle";
+
+// Opens Messages to the fan's Huddle number with the first text ready to send.
+// iPhone and Mac read the body after "&"; Android after "?".
+function smsLink(number: string): string {
+  const apple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
+  return `sms:${number}${apple ? "&" : "?"}body=${encodeURIComponent(FIRST_TEXT)}`;
+}
+
 function validate(f: Fields): Errors {
   const errors: Errors = {};
   if (!f.firstName.trim()) errors.firstName = "Enter your first name.";
@@ -87,7 +96,7 @@ export default function SignupForm() {
   };
 
   if (result) {
-    const smsHref = result.huddleNumber ? `sms:${result.huddleNumber}` : null;
+    const smsHref = result.huddleNumber ? smsLink(result.huddleNumber) : null;
     return (
       <div className={`${s.card} ${s.success}`}>
         <p className={s.eyebrow}>You&apos;re in</p>

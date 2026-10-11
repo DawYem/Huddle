@@ -44,6 +44,8 @@ const REPORT = /^report\b/i;
 const MY_GAMES = /\b(my games|my schedule|upcoming|signed up|what'?s next|whats next|\/games)\b/i;
 const REMIND = /\b(remind|reminder|\/remind)\b/i;
 const FIND = /\b(find|can'?t find|cant find|looking for|where|watch|game|games|play(ing|s)?)\b/i;
+// "hi", "Hi Huddle" (the website pre-fills this), "hey huddle!", "/help".
+const GREETING = /^(\/?help|menu|\?|(hi|hey|hello|yo|sup)(\s+huddle)?[!.]*)$/i;
 const NUMBER = /^(?:join\s+)?#?(\d{1,2})$/i;
 
 export class HuddleAgent {
@@ -86,7 +88,7 @@ export class HuddleAgent {
 
     if (REMIND.test(text)) return this.remindNext(fan);
     if (MY_GAMES.test(text)) return this.listMyGames(fan);
-    if (/^(\/?help|hi|hey|hello|menu|\?)$/i.test(text) || !text) {
+    if (GREETING.test(text) || !text) {
       return known?.textedFirst ? [say(HELP)] : [say(`Hey${fan.name ? ` ${fan.name}` : ''}! 👋`), say(HELP)];
     }
     if (findTeams(this.deps.catalog, text).length || FIND.test(text)) return this.findGames(fan, text);
