@@ -1,0 +1,25 @@
+{
+  "_note": "Sample partner perks for the demo. These are NOT real offers from these businesses; replace with signed partner deals before texting real fans.",
+  "perks": [
+    {
+      "placeId": "ChIJ5y1KDFhZwokR5GHmHxnyrms",
+      "name": "Roma Pizza & restaurant",
+      "perk": "Free garlic knots with any pie when you show your Huddle text"
+    },
+    {
+      "placeId": "ChIJCX5C4u5ZwokR3RzOYiuHifU",
+      "name": "The Parlour Room",
+      "perk": "15% off food for Huddle crews of 4+"
+    },
+    {
+      "placeId": "ChIJN0-8P_tZwokRplzQVSWeDjo",
+      "name": "Sanmiwago",
+      "perk": "Free bubble tea upgrade on game days"
+    },
+    {
+      "placeId": "ChIJrcwfOK1ZwokRH5XNEEZiKOA",
+      "name": "NAYA",
+      "perk": "10% off wraps and bowls before kickoff"
+    }
+  ]
+}

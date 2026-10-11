@@ -55,8 +55,42 @@ Fallback for devices without a GPS fix. Send the Google Geolocation request body
 
 Returns `{ ok: true }`.
 
+### `GET /api/games`
+
+Upcoming games, soonest first. `team` (optional) filters by name or alias, e.g. `?team=knicks`.
+
+### `POST /api/games/:id/signups`
+
+Signs a fan up for a game. Body: `{ handle, name?, is21Plus?, lat?, lng? }`, where `handle` is an E.164 phone number or an email (the two iMessage handle types). Returns 201 for a new sign-up and 200 if they were already in. `textedHuddle: false` means the agent won't text them yet; the site should prompt them to text Huddle first.
+
 ## Traffic handling
 
 - Identical spot searches within about 110 m of each other share one cached result for `CACHE_TTL_SECONDS` (default 300), and concurrent identical searches share one Google call.
 - `/api/*` is rate limited per IP to `RATE_LIMIT_PER_MINUTE` (default 60).
 - Google 429s come back as 503 and other Google errors as 502, with Google's message in `detail`.
+
+## iMessage agent (Photon Spectrum)
+
+`npm run agent` starts the Huddle agent, built on Photon's open source [Spectrum SDK](https://photon.codes/docs/spectrum-ts/introduction) (`spectrum-ts`). It shares the data files with the HTTP server.
+
+- **No Photon credentials yet:** it opens Spectrum's terminal chat, where you are the seed demo fan (`+15555550100`). Try `find Knicks`, `2`, `yes`, `find the Lakers game`, `my games`, `/remind`.
+- **iMessage:** set `SPECTRUM_PROJECT_ID` and `SPECTRUM_PROJECT_SECRET` (app.photon.codes, project Settings) in `.env`. Set `AGENT_TERMINAL=true` to keep the terminal chat as well.
+
+What it does:
+
+1. **Can't find a game?** Text a team (`I can't find the Knicks game`). It lists that team's crews to join by number. If there are none, it offers other upcoming crews plus nearby sports bars from `/api/recommendations` ranking (told to call ahead, since we don't know what a venue is showing).
+2. **Reminders.** Texts signed-up fans `REMINDER_HOURS` before kickoff (default 24 and 2) with time, venue and directions. If the venue doesn't serve food, it adds up to 3 food spots within 800 m, partner perks first. Under-21 fans never get bars.
+3. **Calendar.** Every reminder and sign-up asks "Want it on your calendar?". YES sends a `.ics` invite (opens in Apple Calendar from iMessage) and a Google Calendar link.
+
+Safety rules from the landing page: the agent only texts fans who texted Huddle first, `stop` pauses all texts until `start`, and `report` is logged for a person to review.
+
+### Data
+
+| File | What | In git |
+| --- | --- | --- |
+| `data/games.json` | Games and team aliases. Venues are real Places listings; the games, times and `servesFood` values are sample data. | yes |
+| `data/perks.json` | Partner perks keyed by Places id. **Sample perks, not real offers.** Replace with signed deals before texting real fans. | yes |
+| `data/store.seed.json` | Starting fans and sign-ups, copied to `store.json` on first run. | yes |
+| `data/store.json` | Live fans, sign-ups and sent reminders. Delete it to reset the demo. | no |
+
+`store.json` is a single JSON file shared by the server and the agent, which is fine for a demo; move it to a database before real traffic. `HUDDLE_DATA_DIR` points both processes at another folder.

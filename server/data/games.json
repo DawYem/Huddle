@@ -1,0 +1,101 @@
+{
+  "_note": "Demo fixtures. Venues are real Google Places listings; games, times and servesFood are sample values to replace with real schedules.",
+  "teams": {
+    "New York Knicks": ["knicks", "nyk", "ny knicks"],
+    "Boston Celtics": ["celtics", "boston"],
+    "Atlanta Hawks": ["hawks", "atlanta"],
+    "Arsenal": ["arsenal", "gunners"],
+    "Chelsea": ["chelsea"],
+    "Manchester United": ["united", "man united", "man utd", "manchester"],
+    "Liverpool": ["liverpool"],
+    "New York Giants": ["giants"],
+    "Philadelphia Eagles": ["eagles", "philly"]
+  },
+  "games": [
+    {
+      "id": "nba-knicks-celtics-1011",
+      "league": "NBA",
+      "home": "New York Knicks",
+      "away": "Boston Celtics",
+      "startsAt": "2026-10-11T19:30:00-04:00",
+      "timeZone": "America/New_York",
+      "durationMinutes": 150,
+      "venue": {
+        "name": "Smithfield Hall NYC",
+        "address": "138 W 25th St, New York, NY 10001",
+        "lat": 40.7447306,
+        "lng": -73.9935444,
+        "placeId": "ChIJkzk9I6VZwokRJpievwzdRu0",
+        "servesFood": true
+      }
+    },
+    {
+      "id": "epl-arsenal-chelsea-1017",
+      "league": "Premier League",
+      "home": "Arsenal",
+      "away": "Chelsea",
+      "startsAt": "2026-10-17T07:30:00-04:00",
+      "timeZone": "America/New_York",
+      "durationMinutes": 120,
+      "venue": {
+        "name": "The Keg Room",
+        "address": "53 W 36th St, New York, NY 10018",
+        "lat": 40.7508049,
+        "lng": -73.986,
+        "placeId": "ChIJ8e_e1KtZwokRG1khy16JxDo",
+        "servesFood": false
+      }
+    },
+    {
+      "id": "epl-united-liverpool-1018",
+      "league": "Premier League",
+      "home": "Manchester United",
+      "away": "Liverpool",
+      "startsAt": "2026-10-18T11:30:00-04:00",
+      "timeZone": "America/New_York",
+      "durationMinutes": 120,
+      "venue": {
+        "name": "Football Factory at Legends",
+        "address": "6 W 33rd St, New York, NY 10001",
+        "lat": 40.7479631,
+        "lng": -73.9857839,
+        "placeId": "ChIJK1_3VKhZwokR38t_QiKUQgQ",
+        "servesFood": true
+      }
+    },
+    {
+      "id": "nba-hawks-knicks-1018",
+      "league": "NBA",
+      "home": "Atlanta Hawks",
+      "away": "New York Knicks",
+      "startsAt": "2026-10-18T18:00:00-04:00",
+      "timeZone": "America/New_York",
+      "durationMinutes": 150,
+      "venue": {
+        "name": "Stout NYC",
+        "address": "215 W 35th St, New York, NY 10001",
+        "lat": 40.752069,
+        "lng": -73.9907953,
+        "placeId": "ChIJJ91wx65ZwokRnjW2e69Imic",
+        "servesFood": false
+      }
+    },
+    {
+      "id": "nfl-giants-eagles-1019",
+      "league": "NFL",
+      "home": "New York Giants",
+      "away": "Philadelphia Eagles",
+      "startsAt": "2026-10-19T20:15:00-04:00",
+      "timeZone": "America/New_York",
+      "durationMinutes": 195,
+      "venue": {
+        "name": "Ainsworth Park",
+        "address": "111 E 18th St, New York, NY 10003",
+        "lat": 40.7370465,
+        "lng": -73.9877962,
+        "placeId": "ChIJj1bL7qFZwokRpKbfyVGMmK0",
+        "servesFood": true
+      }
+    }
+  ]
+}
