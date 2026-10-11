@@ -3,10 +3,12 @@ import rateLimit from 'express-rate-limit';
 import type { Config } from './config.js';
 import { UpstreamError } from './google/errors.js';
 import type { Catalog } from './huddle/catalog.js';
+import { spectrumSender } from './photon/send.js';
 import { spectrumUsers } from './photon/users.js';
 import type { Store } from './huddle/store.js';
 import { fansRouter } from './routes/fans.js';
 import { gamesRouter } from './routes/games.js';
+import { locateRouter } from './routes/locate.js';
 import { locationRouter } from './routes/location.js';
 import { recommendationsRouter } from './routes/recommendations.js';
 import { spotsRouter } from './routes/spots.js';
@@ -59,6 +61,21 @@ export function createApp(
         registerSpectrumUser: config.spectrum ? spectrumUsers(config.spectrum, fetchFn) : undefined,
       }),
     );
+    if (config.linkSecret && config.googleApiKey) {
+      app.use(
+        '/api/locate',
+        locateRouter({
+          apiKey: config.googleApiKey,
+          linkSecret: config.linkSecret,
+          catalog: huddle.catalog,
+          gemini: config.geminiApiKey ? { apiKey: config.geminiApiKey, model: config.geminiModel! } : undefined,
+          fetchFn,
+          sendTexts: config.spectrum
+            ? spectrumSender(config.spectrum.projectId, config.spectrum.projectSecret)
+            : undefined,
+        }),
+      );
+    }
   }
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {

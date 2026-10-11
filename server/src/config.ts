@@ -27,6 +27,10 @@ export interface Config {
   // Photon project credentials. When set, website sign-ups are added to the
   // project's Users list so the agent can text them.
   spectrum?: SpectrumCredentials;
+  // Signs the location links the agent texts. Defaults to the Photon secret.
+  linkSecret?: string;
+  // Public site that hosts /locate, e.g. https://huddling.vercel.app.
+  siteUrl?: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -42,6 +46,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     geminiApiKey: env.GEMINI_API_KEY || undefined,
     geminiModel: env.GEMINI_MODEL || 'gemini-3.8-flash',
     huddleNumber: env.HUDDLE_NUMBER || undefined,
+    linkSecret: env.HUDDLE_LINK_SECRET || env.SPECTRUM_PROJECT_SECRET || undefined,
+    siteUrl: (env.HUDDLE_SITE_URL || 'https://huddling.vercel.app').replace(/\/$/, ''),
     spectrum:
       env.SPECTRUM_PROJECT_ID && env.SPECTRUM_PROJECT_SECRET
         ? {

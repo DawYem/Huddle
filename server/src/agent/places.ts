@@ -1,6 +1,8 @@
 import { TtlCache } from '../cache.js';
 import type { GeminiSettings } from '../gemini/client.js';
-import { searchWatchSpots, type SpotSearch, type WatchSpot } from '../google/places.js';
+import { geocodeText, searchWatchSpots, type SpotSearch, type WatchSpot } from '../google/places.js';
+import { barsForSport, barsText, sportGames } from '../huddle/bars.js';
+import type { Sport } from '../huddle/sports.js';
 import { perkFor, type Catalog } from '../huddle/catalog.js';
 import type { Fan, Perk, Venue } from '../huddle/types.js';
 import { directionsUrl } from '../maps/directions.js';
@@ -21,6 +23,9 @@ export interface FoodSpot extends WatchSpot {
 export interface PlacesFinder {
   foodNear(venue: Venue, fan: Fan): Promise<FoodSpot[]>;
   watchSpotsNear(lat: number, lng: number, fan: Fan): Promise<Recommendation[]>;
+  // Ready-to-send text listing bars for a sport near a point.
+  barsNear(lat: number, lng: number, sport: Sport, fan: Fan): Promise<string>;
+  geocode(text: string, near?: { lat: number; lng: number }): Promise<{ lat: number; lng: number; label: string } | undefined>;
 }
 
 export function googlePlacesFinder(
@@ -42,6 +47,13 @@ export function googlePlacesFinder(
         maxResults: 20,
       });
       return rankFood(spots, venue, fan, catalog);
+    },
+    async barsNear(lat, lng, sport, fan) {
+      const bars = await barsForSport({ apiKey, gemini: opts.gemini, fetchFn }, { lat, lng }, sport, fan.is21Plus);
+      return barsText(sport, bars, sportGames(catalog, sport, new Date()));
+    },
+    geocode(text, near) {
+      return geocodeText(apiKey, text, near, fetchFn);
     },
     async watchSpotsNear(lat, lng, fan) {
       const spots = await search({

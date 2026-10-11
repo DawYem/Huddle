@@ -90,6 +90,8 @@ What it does:
 2. **Reminders.** Texts signed-up fans `REMINDER_HOURS` before kickoff (default 24 and 2) with time, venue and directions. If the venue doesn't serve food, it adds up to 3 food spots within 800 m, partner perks first. Under-21 fans never get bars.
 3. **Calendar.** Every reminder and sign-up asks "Want it on your calendar?". YES sends a `.ics` invite (opens in Apple Calendar from iMessage) and a Google Calendar link.
 
+4. **Bars near me, by sport.** Text "bars near me" (or "soccer bar near Penn Station"). The agent sends a native iMessage poll for the sport, then a private link to `/locate` on the site, where Safari asks the fan to allow location. `POST /api/locate` finds bars for that sport nearby and texts them back into the chat (and shows them on the page). Fans can instead text a neighborhood or share a location pin. Links are HMAC-signed with `HUDDLE_LINK_SECRET` (defaults to `SPECTRUM_PROJECT_SECRET`), expire after an hour, and point at `HUDDLE_SITE_URL` (default `https://huddling.vercel.app`).
+
 Safety rules from the landing page: the agent only texts fans who texted Huddle first, `stop` pauses all texts until `start`, and `report` is logged for a person to review.
 
 ### Data

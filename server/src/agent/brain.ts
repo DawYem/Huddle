@@ -1,4 +1,6 @@
 import { findGame, findTeams, gamesForTeam, gameStart, upcomingGames, type Catalog } from '../huddle/catalog.js';
+import { extractLatLng, type LatLng } from '../huddle/mapsLink.js';
+import { matchSport, SPORTS, sportById, type Sport } from '../huddle/sports.js';
 import type { Store } from '../huddle/store.js';
 import type { Fan, Game } from '../huddle/types.js';
 import { directionsUrl } from '../maps/directions.js';
@@ -8,19 +10,28 @@ import type { PlacesFinder } from './places.js';
 
 export type Reply =
   | { kind: 'text'; text: string }
-  | { kind: 'file'; name: string; mimeType: string; data: Buffer };
+  | { kind: 'file'; name: string; mimeType: string; data: Buffer }
+  // A native iMessage poll; the transport falls back to a numbered list.
+  | { kind: 'poll'; title: string; options: string[] };
 
 // What the fan's next short reply ("yes", "2") refers to.
 type Pending =
   // Several reminders can land together; YES then covers all of them.
   | { type: 'calendar'; gameIds: string[] }
   | { type: 'join'; gameIds: string[] }
-  | { type: 'calendar-pick'; gameIds: string[] };
+  | { type: 'calendar-pick'; gameIds: string[] }
+  // Asked which sport; `at` is set when the fan already sent a location.
+  | { type: 'sport'; at?: LatLng }
+  // Sport chosen; waiting for a location (link, pin, or typed place).
+  | { type: 'location'; sport: string };
 
 export interface AgentDeps {
   catalog: Catalog;
   store: Store;
   places: PlacesFinder;
+  // Private Safari link where the fan grants location access. Undefined when
+  // links aren't configured; the fan can still text a place or share a pin.
+  locationLink?: (fan: Fan, sport: Sport) => string | undefined;
   now?: () => Date;
   log?: (msg: string) => void;
 }
@@ -33,6 +44,7 @@ const HELP = [
   '• "find Knicks" to see games you can join',
   '• "my games" for what you signed up for',
   '• "remind me" for your next game',
+  '• "bars near me" to find a spot for any sport',
   '• "stop" to pause texts, "start" to resume',
 ].join('\n');
 
@@ -46,6 +58,7 @@ const REMIND = /\b(remind|reminder|\/remind)\b/i;
 const FIND = /\b(find|can'?t find|cant find|looking for|where|watch|game|games|play(ing|s)?)\b/i;
 // "hi", "Hi Huddle" (the website pre-fills this), "hey huddle!", "/help".
 const GREETING = /^(\/?help|menu|\?|(hi|hey|hello|yo|sup)(\s+huddle)?[!.]*)$/i;
+const BARS = /\b(bars?|pubs?|spots?|near me|nearby|around me|close by|sports bar)\b/i;
 const NUMBER = /^(?:join\s+)?#?(\d{1,2})$/i;
 
 export class HuddleAgent {
@@ -81,11 +94,15 @@ export class HuddleAgent {
     }
 
     const pending = this.pending.get(handle);
-    if (pending) {
+    if (pending?.type === 'sport' || pending?.type === 'location') {
+      const answered = await this.answerBarsFlow(fan, pending, text);
+      if (answered) return answered;
+    } else if (pending) {
       const answered = this.answerPending(fan, pending, text);
       if (answered) return answered;
     }
 
+    if (BARS.test(text)) return this.startBarsFlow(fan, text);
     if (REMIND.test(text)) return this.remindNext(fan);
     if (MY_GAMES.test(text)) return this.listMyGames(fan);
     if (GREETING.test(text) || !text) {
@@ -93,6 +110,17 @@ export class HuddleAgent {
     }
     if (findTeams(this.deps.catalog, text).length || FIND.test(text)) return this.findGames(fan, text);
     return [say("Sorry, I didn't get that."), say(HELP)];
+  }
+
+  // A location arrived outside text: an iMessage pin, a Maps link card, or the
+  // Safari link (which the API answers itself). Saves it and continues the flow.
+  async handleLocation(handle: string, at: LatLng): Promise<Reply[]> {
+    const fan = this.deps.store.upsertFan(handle, { textedFirst: true, lat: at.lat, lng: at.lng });
+    const pending = this.pending.get(handle);
+    const sport = pending?.type === 'location' ? sportById(pending.sport) : undefined;
+    if (sport) return this.barsReply(fan, sport, at);
+    this.pending.set(handle, { type: 'sport', at });
+    return [say('Got your location 📍'), sportPoll()];
   }
 
   // The reminder text for one game. Also offers to add it to the calendar.
@@ -124,6 +152,76 @@ export class HuddleAgent {
     return replies;
   }
 
+  // "bars near me" / "soccer bar near Penn Station": sport first, then location.
+  private async startBarsFlow(fan: Fan, text: string): Promise<Reply[]> {
+    const sport = matchSport(text);
+    if (!sport) {
+      this.pending.set(fan.handle, { type: 'sport' });
+      return [sportPoll()];
+    }
+    // "soccer bar near Penn Station" -> look up "Penn Station" right away.
+    const typed = /\b(near|in|around|at)\s+(.{3,})$/i.exec(text.trim());
+    if (typed) return this.answerBarsFlow(fan, { type: 'location', sport: sport.id }, typed[2]) as Promise<Reply[]>;
+    return this.askLocation(fan, sport);
+  }
+
+  private async answerBarsFlow(
+    fan: Fan,
+    pending: Extract<Pending, { type: 'sport' | 'location' }>,
+    text: string,
+  ): Promise<Reply[] | undefined> {
+    // Let the fan bail out to other commands mid-flow.
+    if (NO.test(text) || MY_GAMES.test(text) || REMIND.test(text) || GREETING.test(text)) {
+      this.pending.delete(fan.handle);
+      return undefined;
+    }
+    if (pending.type === 'sport') {
+      const sport = matchSport(text);
+      if (!sport) return [say(`Pick one: ${SPORTS.map((s, i) => `${i + 1}. ${s.label}`).join('  ')}`)];
+      return pending.at ? this.barsReply(fan, sport, pending.at) : this.askLocation(fan, sport);
+    }
+    const sport = sportById(pending.sport)!;
+    const at = extractLatLng(text);
+    if (at) return this.barsReply(fan, sport, at);
+    try {
+      const near = fan.lat !== undefined && fan.lng !== undefined ? { lat: fan.lat, lng: fan.lng } : undefined;
+      const place = await this.deps.places.geocode(text, near);
+      if (!place) return [say(`I couldn't find "${text}". Try a neighborhood, a street, or a landmark.`)];
+      return this.barsReply(fan, sport, place, place.label);
+    } catch (err) {
+      this.log(`geocode failed: ${err instanceof Error ? err.message : String(err)}`);
+      return [say("I couldn't look that place up right now. Try again in a minute.")];
+    }
+  }
+
+  private askLocation(fan: Fan, sport: Sport): Reply[] {
+    this.pending.set(fan.handle, { type: 'location', sport: sport.id });
+    const link = this.deps.locationLink?.(fan, sport);
+    return [
+      say(
+        [
+          `${sport.label} it is. Where are you?`,
+          link ? `📍 Tap to share your location: ${link}` : undefined,
+          `${link ? 'Or t' : 'T'}ext a neighborhood or address, or share your location pin (+ → Location).`,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      ),
+    ];
+  }
+
+  private async barsReply(fan: Fan, sport: Sport, at: LatLng, label?: string): Promise<Reply[]> {
+    this.pending.delete(fan.handle);
+    this.deps.store.upsertFan(fan.handle, { lat: at.lat, lng: at.lng });
+    try {
+      const text = await this.deps.places.barsNear(at.lat, at.lng, sport, fan);
+      return [say(label ? `Near ${label}:\n${text}` : text)];
+    } catch (err) {
+      this.log(`bar search failed: ${err instanceof Error ? err.message : String(err)}`);
+      return [say("I couldn't load bars right now. Try again in a minute.")];
+    }
+  }
+
   private answerPending(fan: Fan, pending: Pending, text: string): Reply[] | undefined {
     const { store, catalog } = this.deps;
 
@@ -139,6 +237,9 @@ export class HuddleAgent {
       }
       return undefined;
     }
+
+    // Handled by answerBarsFlow.
+    if (pending.type === 'sport' || pending.type === 'location') return undefined;
 
     const n = NUMBER.exec(text);
     if (!n) {
@@ -296,6 +397,10 @@ export class HuddleAgent {
       return "I couldn't load spots near you right now.";
     }
   }
+}
+
+function sportPoll(): Reply {
+  return { kind: 'poll', title: 'Which sport are you watching?', options: SPORTS.map((s) => s.label) };
 }
 
 function say(text: string): Reply {

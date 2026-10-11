@@ -126,3 +126,35 @@ export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: 
     Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
+
+// Turns "Midtown Manhattan" or "near Penn Station" into coordinates with the
+// same Places Text Search the app already uses (no separate Geocoding API).
+export async function geocodeText(
+  apiKey: string,
+  text: string,
+  near?: { lat: number; lng: number },
+  fetchFn: typeof fetch = fetch,
+): Promise<{ lat: number; lng: number; label: string } | undefined> {
+  const res = await fetchFn(`${BASE}:searchText`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'places.location,places.formattedAddress,places.displayName',
+    },
+    body: JSON.stringify({
+      textQuery: text,
+      pageSize: 1,
+      ...(near ? { locationBias: { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: 50_000 } } } : {}),
+    }),
+  });
+  if (!res.ok) throw new UpstreamError('Places API', res.status, await readError(res));
+  const { places = [] } = (await res.json()) as { places?: GooglePlace[] };
+  const p = places[0];
+  if (!p) return undefined;
+  return {
+    lat: p.location.latitude,
+    lng: p.location.longitude,
+    label: p.formattedAddress ?? p.displayName?.text ?? text,
+  };
+}

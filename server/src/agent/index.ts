@@ -1,10 +1,11 @@
-import { attachment, Spectrum, type Space } from 'spectrum-ts';
+import { attachment, poll, Spectrum, type Space } from 'spectrum-ts';
 import { imessage } from 'spectrum-ts/providers/imessage';
 import { terminal } from 'spectrum-ts/providers/terminal';
 import { loadConfig } from '../config.js';
 import { openHuddleData } from '../huddle/data.js';
 import { HuddleAgent, type Reply } from './brain.js';
-import { ReplyGuard, textToAnswer, type InboundLike } from './inbound.js';
+import { signLocationRequest } from '../huddle/locationLink.js';
+import { locationFrom, pollChoice, ReplyGuard, textToAnswer, type InboundLike } from './inbound.js';
 import { googlePlacesFinder } from './places.js';
 import { DEFAULT_WINDOWS_HOURS, dueReminders } from './reminders.js';
 
@@ -31,6 +32,12 @@ const agent = new HuddleAgent({
     cacheTtlMs: config.cacheTtlMs,
     gemini: config.geminiApiKey ? { apiKey: config.geminiApiKey, model: config.geminiModel! } : undefined,
   }),
+  // Signed Safari link for the location prompt; needs the link secret on both
+  // the agent and the deployed API (both default to SPECTRUM_PROJECT_SECRET).
+  locationLink: config.linkSecret
+    ? (fan, sport) =>
+        `${config.siteUrl}/locate?t=${signLocationRequest({ handle: fan.handle, sport: sport.id, is21Plus: fan.is21Plus }, config.linkSecret!)}`
+    : undefined,
   log: (msg) => console.error(`[huddle] ${msg}`),
 });
 
@@ -58,7 +65,16 @@ const spaces = new Map<string, Space>();
 async function deliver(space: Space, replies: Reply[]): Promise<void> {
   for (const r of replies) {
     if (r.kind === 'text') await space.send(r.text);
-    else await space.send(attachment(r.data, { name: r.name, mimeType: r.mimeType }));
+    else if (r.kind === 'file') await space.send(attachment(r.data, { name: r.name, mimeType: r.mimeType }));
+    else {
+      // Native iMessage poll; numbered list where polls aren't supported.
+      try {
+        await space.send(poll(r.title, ...r.options));
+      } catch {
+        const list = r.options.map((o, i) => `${i + 1}. ${o}`).join('\n');
+        await space.send(`${r.title}\n${list}\nReply with a number.`);
+      }
+    }
   }
 }
 
@@ -113,9 +129,23 @@ const guard = new ReplyGuard();
 for await (const [space, message] of app.messages) {
   const handle = message.platform === 'terminal' ? terminalHandle : message.sender?.id;
   if (!handle) continue;
-  // Read receipts, typing, reactions etc. also arrive here; only texts get a reply.
-  const text = textToAnswer(message as InboundLike);
-  if (text === undefined) continue;
+  // Read receipts, typing, reactions etc. also arrive here. Only texts, poll
+  // taps and shared locations get a reply.
+  const text = textToAnswer(message as InboundLike) ?? pollChoice(message as never);
+  let at: Awaited<ReturnType<typeof locationFrom>>;
+  if (text === undefined) {
+    try {
+      at = await locationFrom(message as never);
+    } catch (err) {
+      console.error(`[huddle] couldn't read ${message.content.type} from ${handle}:`, err);
+    }
+    if (!at) {
+      if (!['read', 'typing', 'reaction'].includes(message.content.type)) {
+        console.error(`[huddle] ignored ${message.content.type} from ${handle}`);
+      }
+      continue;
+    }
+  }
   spaces.set(handle, space);
   if (!guard.allow(handle)) {
     console.error(`[huddle] reply limit hit for ${handle}; not answering`);
@@ -123,7 +153,8 @@ for await (const [space, message] of app.messages) {
   }
   try {
     await space.responding(async () => {
-      await deliver(space, await agent.handleMessage(handle, text));
+      const replies = at ? await agent.handleLocation(handle, at) : await agent.handleMessage(handle, text!);
+      await deliver(space, replies);
     });
   } catch (err) {
     console.error(`[huddle] failed to answer ${handle}:`, err);
