@@ -1,3 +1,4 @@
+import Link from "next/link";
 import s from "./page.module.css";
 import Splash from "./Splash";
 
@@ -98,9 +99,9 @@ export default function Home() {
           <nav className={s.navLinks}>
             <a href="#playbook">The playbook</a>
             <a href="#venues">Venues</a>
-            <a href={SMS_HREF} className={s.btnOutline}>
+            <Link href="/signup" className={s.btnOutline}>
               Get in the game
-            </a>
+            </Link>
           </nav>
         </div>
       </header>
@@ -277,9 +278,9 @@ export default function Home() {
               Text Huddle your team and neighborhood. Your first invite comes
               before the next kickoff.
             </p>
-            <a href={SMS_HREF} className={s.btnDark}>
-              Text [your number]
-            </a>
+            <Link href="/signup" className={s.btnDark}>
+              Sign up
+            </Link>
           </div>
         </section>
       </main>

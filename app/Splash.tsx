@@ -18,9 +18,12 @@ const EASE_IN = "cubic-bezier(0.33, 0, 0.67, 0.33)";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Play once per page load, not again on client-side navigation back home
+let played = false;
+
 export default function Splash() {
   const [leaving, setLeaving] = useState(false);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(() => played);
   const wordRef = useRef<HTMLDivElement>(null);
   const ballXRef = useRef<HTMLDivElement>(null);
   const ballYRef = useRef<HTMLDivElement>(null);
@@ -28,6 +31,7 @@ export default function Splash() {
   const ballSpinRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
+    if (played) return;
     const logo = document.querySelector<HTMLElement>("[data-logo]");
     const root = document.documentElement;
     let cancelled = false;
@@ -164,6 +168,7 @@ export default function Splash() {
 
   useEffect(() => {
     if (!done) return;
+    played = true;
     document.documentElement.style.overflow = "";
     const logo = document.querySelector<HTMLElement>("[data-logo]");
     if (logo) logo.style.opacity = "";
