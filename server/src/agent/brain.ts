@@ -204,10 +204,19 @@ export class HuddleAgent {
     const sport = sportById(pending.sport)!;
     const at = extractLatLng(text);
     if (at) return this.barsReply(fan, sport, at);
+    // Replies like "ok", "yes" or "3" aren't places. Looking them up made
+    // Places return random matches (e.g. an address in New Jersey).
+    if (!looksLikePlace(text)) {
+      return [say('Text a neighborhood and city (like "Midtown, New York") or a street address, or tap the link to share your location.')];
+    }
     try {
       const near = fan.lat !== undefined && fan.lng !== undefined ? { lat: fan.lat, lng: fan.lng } : undefined;
       const place = await this.deps.places.geocode(text, near);
-      if (!place) return [say(`I couldn't find "${text}". Try a neighborhood, a street, or a landmark.`)];
+      // Places always returns its best guess, however far-fetched. Only trust
+      // it when it shares a real word with what the fan typed.
+      if (!place || !sharesWord(text, place.label)) {
+        return [say(`I couldn't find "${text}". Try a neighborhood and city, like "Midtown, New York".`)];
+      }
       return this.barsReply(fan, sport, place, place.label);
     } catch (err) {
       this.log(`geocode failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -533,4 +542,32 @@ function say(text: string): Reply {
 
 function dedupe(games: Game[]): Game[] {
   return [...new Map(games.map((g) => [g.id, g])).values()];
+}
+
+const NOT_PLACES = /^(y|ya|yes|yeah|yep|yup|sure|ok|okay|k|kk|no|nope|nah|thanks|thank you|thx|ty|lol|cool|great|nice|hi|hey|hello|yo|sup|what|huh|\?|help)[!.?]*$/i;
+
+// Worth a Places lookup: not a stock reply, not a bare number, a few letters long.
+function looksLikePlace(text: string): boolean {
+  const t = text.trim();
+  return t.length >= 3 && !NOT_PLACES.test(t) && !/^#?\d{1,2}$/.test(t) && /\p{L}{3,}/u.test(t);
+}
+
+const STOPWORDS = new Set(['near', 'the', 'and', 'street', 'st', 'ave', 'avenue', 'road', 'rd', 'usa', 'new', 'york']);
+
+// True when the matched place shares a meaningful word with the fan's text,
+// e.g. "penn station" vs "Penn Station, New York". Guards against Places'
+// far-fetched best guesses.
+function sharesWord(typed: string, label: string): boolean {
+  const words = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((w) => w.length >= 3 && !STOPWORDS.has(w)),
+    );
+  const a = words(typed);
+  const b = words(label);
+  if (!a.size) return false;
+  for (const w of a) for (const x of b) if (x.startsWith(w) || w.startsWith(x)) return true;
+  return false;
 }

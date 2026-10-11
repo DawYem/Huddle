@@ -155,6 +155,11 @@ export async function geocodeText(
   return {
     lat: p.location.latitude,
     lng: p.location.longitude,
-    label: p.formattedAddress ?? p.displayName?.text ?? text,
+    // "Penn Station, New York, NY 10119": the name first, since the address
+    // alone often doesn't mention it.
+    label: [p.displayName?.text, p.formattedAddress]
+      .filter((part, i, all): part is string => Boolean(part) && (i === 0 || !all[1]?.startsWith(all[0] ?? '\u0000')))
+      .join(', ')
+      .replace(/, USA$/, '') || text,
   };
 }

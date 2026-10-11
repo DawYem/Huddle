@@ -175,3 +175,33 @@ test('POST /api/locate checks the link, finds bars, and texts them to the fan', 
   assert.match(sent[0].texts[0], /Goal Cafe/);
   assert.match(sent[0].texts[0], /Huddle crews for soccer/);
 });
+
+test('typed places: stock replies are not looked up, and far-fetched matches are rejected', async () => {
+  const store = new Store(join(mkdtempSync(join(tmpdir(), 'huddle-')), 'store.json'));
+  const looked: string[] = [];
+  const places: PlacesFinder = {
+    foodNear: async () => [],
+    watchSpotsNear: async () => [],
+    barsNear: async (_lat, _lng, sport) => ({ text: `BARS for ${sport.label}`, count: 3 }),
+    geocode: async (text) => {
+      looked.push(text);
+      // Places' "best guess" for anything: a random place in New Jersey.
+      if (/okee/i.test(text) || /^ok/i.test(text)) return { lat: 40.9, lng: -74.1, label: 'Okeefe Ave, Paterson, NJ 07501' };
+      if (/penn/i.test(text)) return { lat: 40.7506, lng: -73.9935, label: 'Penn Station, New York, NY 10119' };
+      return { lat: 40.2, lng: -74.5, label: 'Route 9, Freehold, NJ 07728' };
+    },
+  };
+  const a = new HuddleAgent({ catalog, store, places });
+  await a.handleMessage(FAN, 'soccer bars');
+
+  for (const reply of ['ok', 'yes', '3', 'thanks!', 'k']) {
+    const r = texts(await a.handleMessage(FAN, reply));
+    if (reply === 'yes' || reply === 'ok' || reply === 'k') continue; // YES/NO end or re-ask the flow
+    assert.match(r, /Text a neighborhood and city/, reply);
+  }
+  assert.deepEqual(looked, [], 'nothing looked up');
+
+  await a.handleMessage(FAN, 'soccer bars');
+  assert.match(texts(await a.handleMessage(FAN, 'blorpville')), /couldn't find "blorpville"/);
+  assert.match(texts(await a.handleMessage(FAN, 'Penn Station')), /Near Penn Station, New York, NY 10119:\nBARS for Soccer/);
+});
