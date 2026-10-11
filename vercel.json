@@ -8,17 +8,26 @@
     "server": {
       "root": "server",
       "framework": "express",
-      "entrypoint": "src/index.ts"
+      "entrypoint": "src/index.ts",
+      "functions": {
+        "src/index.ts": {
+          "includeFiles": "package.json"
+        }
+      }
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": { "service": "server" }
+      "destination": {
+        "service": "server"
+      }
     },
     {
       "source": "/(.*)",
-      "destination": { "service": "app" }
+      "destination": {
+        "service": "app"
+      }
     }
   ]
 }
