@@ -86,12 +86,18 @@ function canReach(handle: string): boolean {
   return useIMessage || handle === terminalHandle;
 }
 
+// iMessage replies go through a conversation we open ourselves
+// (im.space.create), which routes via the fan's assigned shared line. Replying
+// on the conversation attached to an inbound message didn't deliver on
+// Photon's shared plan, even though the send call succeeded.
 async function spaceFor(handle: string): Promise<Space> {
   const known = spaces.get(handle);
   if (known) return known;
   if (useTerminal && handle === terminalHandle) return terminal(app).space.get('chat-1');
   const im = imessage(app);
-  return im.space.create(await im.user(handle));
+  const space = await im.space.create(await im.user(handle));
+  spaces.set(handle, space);
+  return space;
 }
 
 let checking = false;
@@ -154,16 +160,17 @@ for await (const [space, message] of app.messages) {
       continue;
     }
   }
-  spaces.set(handle, space);
+  if (message.platform === 'terminal') spaces.set(handle, space);
   if (!guard.allow(handle)) {
     console.error(`[huddle] reply limit hit for ${handle}; not answering`);
     continue;
   }
   try {
-    await space.responding(async () => {
-      const replies = at ? await agent.handleLocation(handle, at) : await agent.handleMessage(handle, text!);
-      await deliver(space, replies);
-    });
+    const out = message.platform === 'terminal' ? space : await spaceFor(handle);
+    const started = Date.now();
+    const replies = at ? await agent.handleLocation(handle, at) : await agent.handleMessage(handle, text!);
+    await deliver(out, replies);
+    console.log(`[huddle] -> ${replies.length} repl${replies.length === 1 ? 'y' : 'ies'} to ${handle.replace(/.(?=.{4})/g, '•')} in ${Date.now() - started} ms`);
   } catch (err) {
     console.error(`[huddle] failed to answer ${handle}:`, err);
   }
