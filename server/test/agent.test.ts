@@ -243,3 +243,20 @@ test('"Hi Huddle", the text the website pre-fills, gets the welcome', async () =
     assert.match(replies, /I'm Huddle/, text);
   }
 });
+
+test('only real texts from a person get a reply (no read-receipt loop)', async () => {
+  const { textToAnswer, ReplyGuard } = await import('../src/agent/inbound.js');
+  assert.equal(textToAnswer({ content: { type: 'text', text: ' Hi Huddle ' } }), 'Hi Huddle');
+  for (const type of ['read', 'typing', 'reaction', 'attachment', 'rename']) {
+    assert.equal(textToAnswer({ content: { type } }), undefined, type);
+  }
+  assert.equal(textToAnswer({ content: { type: 'text', text: '   ' } }), undefined);
+  assert.equal(textToAnswer({ content: { type: 'text', text: 'hi' }, direction: 'outbound' }), undefined);
+  assert.equal(textToAnswer({ content: { type: 'text', text: 'hi' }, sender: { kind: 'agent' } }), undefined);
+
+  const guard = new ReplyGuard(3, 60_000);
+  const t = 1_000_000;
+  assert.deepEqual([1, 2, 3, 4].map((i) => guard.allow('+1', t + i)), [true, true, true, false]);
+  assert.equal(guard.allow('+2', t), true, 'other fans unaffected');
+  assert.equal(guard.allow('+1', t + 61_000), true, 'allowed again after the window');
+});

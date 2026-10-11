@@ -4,6 +4,7 @@ import { terminal } from 'spectrum-ts/providers/terminal';
 import { loadConfig } from '../config.js';
 import { openHuddleData } from '../huddle/data.js';
 import { HuddleAgent, type Reply } from './brain.js';
+import { ReplyGuard, textToAnswer, type InboundLike } from './inbound.js';
 import { googlePlacesFinder } from './places.js';
 import { DEFAULT_WINDOWS_HOURS, dueReminders } from './reminders.js';
 
@@ -107,13 +108,21 @@ console.log(
   `[huddle] agent running on ${[useIMessage && 'iMessage', useTerminal && 'terminal'].filter(Boolean).join(' + ')}`,
 );
 
+const guard = new ReplyGuard();
+
 for await (const [space, message] of app.messages) {
   const handle = message.platform === 'terminal' ? terminalHandle : message.sender?.id;
   if (!handle) continue;
+  // Read receipts, typing, reactions etc. also arrive here; only texts get a reply.
+  const text = textToAnswer(message as InboundLike);
+  if (text === undefined) continue;
   spaces.set(handle, space);
+  if (!guard.allow(handle)) {
+    console.error(`[huddle] reply limit hit for ${handle}; not answering`);
+    continue;
+  }
   try {
     await space.responding(async () => {
-      const text = message.content.type === 'text' ? message.content.text : '';
       await deliver(space, await agent.handleMessage(handle, text));
     });
   } catch (err) {
