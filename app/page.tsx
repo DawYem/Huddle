@@ -66,7 +66,6 @@ const rules = [
 
 const crew = ["JM", "AK", "DO", "RT"];
 
-const SMS_HREF = "sms:[YOUR NUMBER]";
 
 function Logo({ target = false }: { target?: boolean }) {
   return (
@@ -141,9 +140,6 @@ export default function Home() {
           </div>
 
           <div className={s.heroCtas}>
-            <a href={SMS_HREF} className={s.btnPrimary}>
-              Text [your number]
-            </a>
             <a href="#playbook" className={s.btnGhost}>
               See the playbook
             </a>
