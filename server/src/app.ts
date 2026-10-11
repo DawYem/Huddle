@@ -2,11 +2,18 @@ import express, { type ErrorRequestHandler } from 'express';
 import rateLimit from 'express-rate-limit';
 import type { Config } from './config.js';
 import { UpstreamError } from './google/errors.js';
+import type { Catalog } from './huddle/catalog.js';
+import type { Store } from './huddle/store.js';
+import { gamesRouter } from './routes/games.js';
 import { locationRouter } from './routes/location.js';
 import { recommendationsRouter } from './routes/recommendations.js';
 import { spotsRouter } from './routes/spots.js';
 
-export function createApp(config: Config, fetchFn: typeof fetch = fetch) {
+export function createApp(
+  config: Config,
+  fetchFn: typeof fetch = fetch,
+  huddle?: { catalog: Catalog; store: Store },
+) {
   const app = express();
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '100kb' }));
@@ -27,6 +34,7 @@ export function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   app.use('/api/location', locationRouter(config.googleApiKey, fetchFn));
   app.use('/api/spots', spotsRouter(config.googleApiKey, fetchFn, config.cacheTtlMs));
   app.use('/api/recommendations', recommendationsRouter(config, fetchFn));
+  if (huddle) app.use('/api/games', gamesRouter(huddle.catalog, huddle.store));
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {
     if (err instanceof UpstreamError) {

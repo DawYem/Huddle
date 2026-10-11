@@ -1,0 +1,20 @@
+{
+  "_note": "Copied to store.json on first run. store.json holds live fans and sign-ups and is gitignored.",
+  "fans": [
+    {
+      "handle": "+15555550100",
+      "name": "Demo Fan",
+      "is21Plus": true,
+      "favoriteTeam": "New York Knicks",
+      "lat": 40.7505,
+      "lng": -73.9934,
+      "textedFirst": false,
+      "optedOut": false
+    }
+  ],
+  "signups": [
+    { "gameId": "nba-knicks-celtics-1011", "handle": "+15555550100", "createdAt": "2026-10-09T15:00:00Z" },
+    { "gameId": "epl-arsenal-chelsea-1017", "handle": "+15555550100", "createdAt": "2026-10-09T15:05:00Z" }
+  ],
+  "remindersSent": []
+}
