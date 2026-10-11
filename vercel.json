@@ -8,12 +8,8 @@
     "server": {
       "root": "server",
       "framework": "express",
-      "entrypoint": "src/index.ts",
-      "functions": {
-        "src/index.ts": {
-          "includeFiles": "package.json"
-        }
-      }
+      "entrypoint": "dist/vercel/index.mjs",
+      "buildCommand": "npm run build:vercel"
     }
   },
   "rewrites": [
