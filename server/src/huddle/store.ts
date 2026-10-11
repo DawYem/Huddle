@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import type { CommunityEvent, Fan, Signup, WaitlistEntry } from './types.js';
+import type { CommunityEvent, Crew, Fan, Signup, WaitlistEntry } from './types.js';
 
 export interface StoreData {
   fans: Fan[];
@@ -10,6 +10,8 @@ export interface StoreData {
   events: CommunityEvent[];
   // Fans waiting for a community event near them.
   waitlist: WaitlistEntry[];
+  // Fans matched into groups at a bar.
+  crews: Crew[];
 }
 
 // Where the data lives. The file works for one machine; Redis is shared by the
@@ -26,6 +28,7 @@ function complete(d: Partial<StoreData> = {}): StoreData {
     remindersSent: d.remindersSent ?? [],
     events: d.events ?? [],
     waitlist: d.waitlist ?? [],
+    crews: d.crews ?? [],
   };
 }
 
@@ -186,6 +189,24 @@ export class Store {
   removeFromWaitlist(handles: string[]): Promise<void> {
     return this.update((data) => {
       data.waitlist = data.waitlist.filter((w) => !handles.includes(w.handle));
+    });
+  }
+
+  async crew(id: string): Promise<Crew | undefined> {
+    return (await this.read()).crews.find((c) => c.id === id);
+  }
+
+  // Puts the fan in an open crew via `pick` (or a new one from `create`).
+  // Atomic, so two fans picking the same bar at once land in the same crew.
+  joinCrew(pick: (crews: Crew[]) => Crew | undefined, create: () => Crew, member: Crew['members'][number]): Promise<Crew> {
+    return this.update((data) => {
+      let crew = pick(data.crews);
+      if (!crew) {
+        crew = create();
+        data.crews.push(crew);
+      }
+      if (!crew.members.some((m) => m.handle === member.handle)) crew.members.push(member);
+      return { ...crew, members: [...crew.members] };
     });
   }
 

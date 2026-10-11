@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { GeminiSettings } from '../gemini/client.js';
-import { barsForSport, barsText, sportGames } from '../huddle/bars.js';
+import { barPicks, barsForSport, barsText, sportGames } from '../huddle/bars.js';
 import type { Catalog } from '../huddle/catalog.js';
 import { verifyLocationRequest } from '../huddle/locationLink.js';
 import { sportById } from '../huddle/sports.js';
@@ -67,7 +67,11 @@ export function locateRouter(opts: LocateOptions): Router {
         lat,
         lng,
         lastSport: sport.id,
-        prompt: bars.length ? undefined : { type: 'community-join', sport: sport.id, lat, lng, at: new Date().toISOString() },
+        // The fan's next reply goes to the agent: a number picks a bar (and a
+        // crew), or YES/NO answers the community question.
+        prompt: bars.length
+          ? { type: 'bar-pick', sport: sport.id, bars: barPicks(bars), at: new Date().toISOString() }
+          : { type: 'community-join', sport: sport.id, lat, lng, at: new Date().toISOString() },
       });
       let texted = false;
       if (opts.sendTexts) {

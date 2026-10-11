@@ -4,6 +4,7 @@ import { terminal } from 'spectrum-ts/providers/terminal';
 import { loadConfig } from '../config.js';
 import { openHuddleData } from '../huddle/data.js';
 import { HuddleAgent, type Reply } from './brain.js';
+import { publicCrew, signCrew } from '../huddle/crews.js';
 import { signLocationRequest } from '../huddle/locationLink.js';
 import { EchoFilter, locationFrom, pollChoice, ReplyGuard, textToAnswer, type InboundLike } from './inbound.js';
 import { googlePlacesFinder } from './places.js';
@@ -42,6 +43,13 @@ const agent = new HuddleAgent({
     ? (fan, sport, at) =>
         `${config.siteUrl}/host?t=${signLocationRequest({ handle: fan.handle, sport: sport.id, is21Plus: fan.is21Plus, lat: at.lat, lng: at.lng }, config.linkSecret!)}`
     : undefined,
+  // Crew page link: first name for the greeting, plus a signed snapshot so the
+  // page works even before the website and agent share storage.
+  crewLink: (crew, fan) => {
+    const params = new URLSearchParams({ name: (fan.name ?? '').trim().split(/\s+/)[0] || 'You' });
+    if (config.linkSecret) params.set('c', signCrew(publicCrew(crew), config.linkSecret));
+    return `${config.siteUrl}/crew/${crew.id}?${params}`;
+  },
   log: (msg) => console.error(`[huddle] ${msg}`),
 });
 

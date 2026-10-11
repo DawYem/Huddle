@@ -1,9 +1,10 @@
 import { findGame, findTeams, gamesForTeam, gameStart, upcomingGames, type Catalog } from '../huddle/catalog.js';
 import { eventLine, eventsNear, joinedText, type NearbyEvent } from '../huddle/community.js';
+import { crewText, displayName, newCrew, openCrewFor } from '../huddle/crews.js';
 import { extractLatLng, type LatLng } from '../huddle/mapsLink.js';
 import { matchSport, SPORTS, sportById, type Sport } from '../huddle/sports.js';
 import type { Store } from '../huddle/store.js';
-import type { Fan, Game } from '../huddle/types.js';
+import type { BarPick, Crew, Fan, Game } from '../huddle/types.js';
 import { directionsUrl } from '../maps/directions.js';
 import { buildIcs, googleCalendarUrl, icsFileName } from './calendar.js';
 import { formatCountdown, formatWhen, gameLine, gameTitle } from './format.js';
@@ -28,7 +29,9 @@ type Pending =
   // No bars found: "join a community watch event?" then "are you hosting one?"
   | { type: 'community-join'; sport: string; at: LatLng }
   | { type: 'community-pick'; sport: string; at: LatLng; eventIds: string[] }
-  | { type: 'community-host'; sport: string; at: LatLng };
+  | { type: 'community-host'; sport: string; at: LatLng }
+  // Bars were listed; a number picks one and matches the fan into a crew.
+  | { type: 'bar-pick'; sport: string; bars: BarPick[] };
 
 export interface AgentDeps {
   catalog: Catalog;
@@ -41,6 +44,8 @@ export interface AgentDeps {
   hostLink?: (fan: Fan, sport: Sport, at: LatLng) => string | undefined;
   // How long to keep looking for an event before queueing the fan.
   queueWaitMs?: number;
+  // Link to the crew page for a fan in a crew.
+  crewLink?: (crew: Crew, fan: Fan) => string | undefined;
   now?: () => Date;
   log?: (msg: string) => void;
 }
@@ -105,14 +110,20 @@ export class HuddleAgent {
     // A question texted by the website API (no bars near the shared location).
     // It replaces whatever the agent was waiting for (usually the location
     // the fan just shared through the link).
-    if (fan.prompt?.type === 'community-join') {
+    if (fan.prompt?.type === 'bar-pick') {
+      this.pending.set(handle, { type: 'bar-pick', sport: fan.prompt.sport, bars: fan.prompt.bars });
+      await store.upsertFan(handle, { prompt: undefined });
+    } else if (fan.prompt?.type === 'community-join') {
       const { sport, lat, lng } = fan.prompt;
       this.pending.set(handle, { type: 'community-join', sport, at: { lat, lng } });
       await store.upsertFan(handle, { prompt: undefined });
     }
 
     const pending = this.pending.get(handle);
-    if (pending?.type === 'community-join' || pending?.type === 'community-pick' || pending?.type === 'community-host') {
+    if (pending?.type === 'bar-pick') {
+      const answered = await this.answerBarPick(fan, pending, text);
+      if (answered) return answered;
+    } else if (pending?.type === 'community-join' || pending?.type === 'community-pick' || pending?.type === 'community-host') {
       const answered = await this.answerCommunity(fan, pending, text);
       if (answered) return answered;
     } else if (pending?.type === 'sport' || pending?.type === 'location') {
@@ -244,7 +255,7 @@ export class HuddleAgent {
     this.pending.delete(fan.handle);
     await this.deps.store.upsertFan(fan.handle, { lat: at.lat, lng: at.lng });
     try {
-      const { text, count } = await this.deps.places.barsNear(at.lat, at.lng, sport, fan);
+      const { text, count, bars } = await this.deps.places.barsNear(at.lat, at.lng, sport, fan);
       if (!count) {
         // Nothing nearby: offer a community watch party instead.
         this.pending.set(fan.handle, { type: 'community-join', sport: sport.id, at });
@@ -254,6 +265,7 @@ export class HuddleAgent {
           ),
         ];
       }
+      this.pending.set(fan.handle, { type: 'bar-pick', sport: sport.id, bars });
       return [say(label ? `Near ${label}:\n${text}` : text)];
     } catch (err) {
       this.log(`bar search failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -340,6 +352,31 @@ export class HuddleAgent {
 
   private async findEvents(at: LatLng, sport: string): Promise<NearbyEvent[]> {
     return eventsNear(await this.deps.store.events(), at, sport, this.now());
+  }
+
+  // The end of the bar flow: the fan picks a bar and joins a crew there.
+  private async answerBarPick(
+    fan: Fan,
+    pending: Extract<Pending, { type: 'bar-pick' }>,
+    text: string,
+  ): Promise<Reply[] | undefined> {
+    const n = NUMBER.exec(text);
+    if (!n) {
+      // Anything else ends the pick and is handled as a normal message.
+      this.pending.delete(fan.handle);
+      return undefined;
+    }
+    const bar = pending.bars[Number(n[1]) - 1];
+    if (!bar) return [say(`Pick a number from 1 to ${pending.bars.length}.`)];
+    this.pending.delete(fan.handle);
+    const now = this.now();
+    const crew = await this.deps.store.joinCrew(
+      (crews) => openCrewFor(crews, bar, pending.sport, fan.handle, now),
+      () => newCrew(bar, pending.sport, now),
+      { handle: fan.handle, name: displayName(fan) },
+    );
+    const sport = sportById(pending.sport);
+    return [say(crewText(crew, this.deps.crewLink?.(crew, fan), sport?.label ?? pending.sport))];
   }
 
   private askHosting(fan: Fan, sport: Sport, at: LatLng): Reply[] {

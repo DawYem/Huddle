@@ -3,7 +3,15 @@
   "services": {
     "app": {
       "root": ".",
-      "framework": "nextjs"
+      "framework": "nextjs",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "server",
+          "format": "url",
+          "env": "HUDDLE_SERVER_URL"
+        }
+      ]
     },
     "server": {
       "root": "server",

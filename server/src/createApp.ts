@@ -8,6 +8,7 @@ import { spectrumUsers } from './photon/users.js';
 import type { Store } from './huddle/store.js';
 import { fansRouter } from './routes/fans.js';
 import { gamesRouter } from './routes/games.js';
+import { crewsRouter } from './routes/crews.js';
 import { eventsRouter } from './routes/events.js';
 import { locateRouter } from './routes/locate.js';
 import { locationRouter } from './routes/location.js';
@@ -65,6 +66,7 @@ export function createApp(
     const sendTexts = config.spectrum
       ? spectrumSender(config.spectrum.projectId, config.spectrum.projectSecret)
       : undefined;
+    app.use('/api/crews', crewsRouter(huddle.store, config.linkSecret));
     if (config.googleApiKey) {
       app.use(
         '/api/events',

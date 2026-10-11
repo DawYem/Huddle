@@ -38,7 +38,10 @@ export interface Fan {
   // Last sport the fan searched bars for; used by JOIN / HOST replies.
   lastSport?: string;
   // A yes/no question the website API texted (the agent picks it up from here).
-  prompt?: { type: 'community-join'; sport: string; lat: number; lng: number; at: string };
+  prompt?:
+    | { type: 'community-join'; sport: string; lat: number; lng: number; at: string }
+    // Bars were texted by the website API; a number reply picks one.
+    | { type: 'bar-pick'; sport: string; bars: BarPick[]; at: string };
   // Where to search for spots when the fan has no game nearby.
   lat?: number;
   lng?: number;
@@ -85,4 +88,26 @@ export interface WaitlistEntry {
   lat: number;
   lng: number;
   since: string;
+}
+
+// A small group of fans watching one sport at the same bar.
+export interface Crew {
+  id: string;
+  sport: string; // sport id from sports.ts
+  venueName: string;
+  address?: string;
+  lat: number;
+  lng: number;
+  placeId?: string;
+  members: { handle: string; name: string }[];
+  createdAt: string;
+}
+
+// A bar the fan can pick from a numbered list.
+export interface BarPick {
+  id: string;
+  name: string;
+  address?: string;
+  lat: number;
+  lng: number;
 }

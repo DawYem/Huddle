@@ -3,7 +3,7 @@ import { searchWatchSpots } from '../google/places.js';
 import { recommendSpots, type Recommendation } from '../recommendations/recommend.js';
 import { upcomingGames, type Catalog } from './catalog.js';
 import type { Sport } from './sports.js';
-import type { Game } from './types.js';
+import type { BarPick, Game } from './types.js';
 
 const RADIUS_METERS = 3000;
 
@@ -34,10 +34,16 @@ export function barsText(sport: Sport, bars: Recommendation[], games: Game[] = [
   if (!bars.length) return `I couldn't find bars for ${sport.label.toLowerCase()} near you. Try a nearby neighborhood name.`;
   const lines = [
     `🏟 ${sport.label} spots near you (call ahead to check they're showing your game):`,
-    ...bars.map((b) => `• ${b.name}: ${b.reason}\n  ${b.directionsUrl}`),
+    ...bars.map((b, i) => `${i + 1}. ${b.name}: ${b.reason}\n   ${b.directionsUrl}`),
   ];
   if (games.length) {
     lines.push('', `Huddle crews for ${sport.label.toLowerCase()}: ${games.map((g) => `${g.home} vs ${g.away} at ${g.venue.name}`).join('; ')}. Text "find ${games[0].home}" to join.`);
   }
+  lines.push('', "Reply with a number to pick your spot and I'll match you with a crew there.");
   return lines.join('\n');
+}
+
+// The fields a numbered pick needs, kept with the fan between messages.
+export function barPicks(bars: Recommendation[]): BarPick[] {
+  return bars.map((b) => ({ id: b.id, name: b.name, address: b.address, lat: b.lat, lng: b.lng }));
 }

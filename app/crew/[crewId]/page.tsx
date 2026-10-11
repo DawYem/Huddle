@@ -19,13 +19,13 @@ const CREWS: Record<
   {
     match: {
       home: string;
-      away: string;
+      away?: string;
       kickoff: string;
       meet: string;
       venue: string;
       address: string;
-      distance: string;
-      table: string;
+      distance?: string;
+      table?: string;
     };
     members: { name: string; vibe: string; note: string }[];
   }
@@ -50,6 +50,36 @@ const CREWS: Record<
   },
 };
 
+type CrewData = (typeof CREWS)[string];
+
+// Real crews come from the API (the iMessage agent creates them when a fan
+// picks a bar). On Vercel the page reaches the server over the internal
+// "server" binding (vercel.json); locally it's the Express server on :4000.
+async function loadCrew(crewId: string, snapshot?: string): Promise<CrewData | undefined> {
+  const base = process.env.HUDDLE_SERVER_URL ?? process.env.HUDDLE_API_URL ?? "http://localhost:4000";
+  const url = new URL(`api/crews/${encodeURIComponent(crewId)}`, base.endsWith("/") ? base : `${base}/`);
+  if (snapshot) url.searchParams.set("c", snapshot);
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return undefined;
+    const { crew } = (await res.json()) as {
+      crew: { sportLabel: string; venueName: string; address?: string; members: string[] };
+    };
+    return {
+      match: {
+        home: `${crew.sportLabel} watch crew`,
+        kickoff: "Next game",
+        meet: "15 min before",
+        venue: crew.venueName,
+        address: crew.address ?? crew.venueName,
+      },
+      members: crew.members.map((name) => ({ name, vibe: "Fan", note: `Watching ${crew.sportLabel.toLowerCase()}` })),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function initials(name: string) {
   return name
     .split(/\s+/)
@@ -64,15 +94,18 @@ export default async function CrewPage({
   searchParams,
 }: {
   params: Promise<{ crewId: string }>;
-  searchParams: Promise<{ name?: string }>;
+  searchParams: Promise<{ name?: string; c?: string }>;
 }) {
   const { crewId } = await params;
-  const crew = CREWS[crewId];
+  const { name, c } = await searchParams;
+  const crew = CREWS[crewId] ?? (await loadCrew(crewId, c));
   if (!crew) notFound();
 
-  const { match: MATCH, members: MEMBERS } = crew;
-  const { name } = await searchParams;
   const you = name?.trim() || "You";
+  const { match: MATCH } = crew;
+  // Real crews list everyone, including the viewer; show them once, as "you".
+  const youIndex = crew.members.findIndex((m) => m.name.split(" ")[0].toLowerCase() === you.toLowerCase());
+  const MEMBERS = crew.members.filter((_, i) => i !== youIndex);
 
   return (
     <div className={s.page}>
@@ -98,7 +131,7 @@ export default async function CrewPage({
               <span>Confirmed</span>
             </div>
             <h2 className={s.match}>
-              {MATCH.home} vs {MATCH.away}
+              {MATCH.away ? `${MATCH.home} vs ${MATCH.away}` : MATCH.home}
             </h2>
             <dl className={s.details}>
               <div>
@@ -113,13 +146,15 @@ export default async function CrewPage({
                 <dt>Venue</dt>
                 <dd>{MATCH.venue}</dd>
               </div>
-              <div>
-                <dt>Distance</dt>
-                <dd>{MATCH.distance}</dd>
-              </div>
+              {MATCH.distance && (
+                <div>
+                  <dt>Distance</dt>
+                  <dd>{MATCH.distance}</dd>
+                </div>
+              )}
             </dl>
             <p className={s.address}>
-              {MATCH.address} · {MATCH.table}
+              {MATCH.table ? `${MATCH.address} · ${MATCH.table}` : MATCH.address}
             </p>
           </div>
 
