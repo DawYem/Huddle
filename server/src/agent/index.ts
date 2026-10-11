@@ -5,7 +5,7 @@ import { loadConfig } from '../config.js';
 import { openHuddleData } from '../huddle/data.js';
 import { HuddleAgent, type Reply } from './brain.js';
 import { signLocationRequest } from '../huddle/locationLink.js';
-import { locationFrom, pollChoice, ReplyGuard, textToAnswer, type InboundLike } from './inbound.js';
+import { EchoFilter, locationFrom, pollChoice, ReplyGuard, textToAnswer, type InboundLike } from './inbound.js';
 import { googlePlacesFinder } from './places.js';
 import { DEFAULT_WINDOWS_HOURS, dueReminders } from './reminders.js';
 
@@ -66,9 +66,14 @@ const app = await Spectrum({
 // Last conversation we saw per fan, so reminders land in the same thread.
 const spaces = new Map<string, Space>();
 
-async function deliver(space: Space, replies: Reply[]): Promise<void> {
+const echoes = new EchoFilter();
+
+async function deliver(space: Space, replies: Reply[], handle: string): Promise<void> {
   for (const r of replies) {
-    if (r.kind === 'text') await space.send(r.text);
+    if (r.kind === 'text') {
+      echoes.remember(handle, r.text);
+      await space.send(r.text);
+    }
     else if (r.kind === 'file') await space.send(attachment(r.data, { name: r.name, mimeType: r.mimeType }));
     else {
       // Native iMessage poll; numbered list where polls aren't supported.
@@ -76,7 +81,9 @@ async function deliver(space: Space, replies: Reply[]): Promise<void> {
         await space.send(poll(r.title, ...r.options));
       } catch {
         const list = r.options.map((o, i) => `${i + 1}. ${o}`).join('\n');
-        await space.send(`${r.title}\n${list}\nReply with a number.`);
+        const text = `${r.title}\n${list}\nReply with a number.`;
+        echoes.remember(handle, text);
+        await space.send(text);
       }
     }
   }
@@ -108,7 +115,7 @@ async function sendDueReminders(): Promise<void> {
     for (const { fan, game, keys } of await dueReminders(store, catalog, new Date(), windowsHours)) {
       if (!canReach(fan.handle)) continue;
       try {
-        await deliver(await spaceFor(fan.handle), await agent.buildReminder(fan, game));
+        await deliver(await spaceFor(fan.handle), await agent.buildReminder(fan, game), fan.handle);
         await store.markRemindersSent(keys);
       } catch (err) {
         console.error(`[huddle] reminder to ${fan.handle} for ${game.id} failed:`, err);
@@ -135,6 +142,9 @@ console.log(
 );
 
 const guard = new ReplyGuard();
+// Photon replays events missed while the agent was off. Don't answer those:
+// after a crash or restart they can include echoes of our own old replies.
+const startedAt = Date.now();
 
 for await (const [space, message] of app.messages) {
   const handle = message.platform === 'terminal' ? terminalHandle : message.sender?.id;
@@ -143,9 +153,19 @@ for await (const [space, message] of app.messages) {
     console.log(`[huddle] <- ${message.content.type} from ${handle ? handle.replace(/.(?=.{4})/g, '•') : 'unknown'}`);
   }
   if (!handle) continue;
+  const sentAt = (message as { timestamp?: Date }).timestamp;
+  if (sentAt instanceof Date && sentAt.getTime() < startedAt - 5_000) {
+    console.log(`[huddle] skipped ${message.content.type} sent before startup`);
+    continue;
+  }
   // Read receipts, typing, reactions etc. also arrive here. Only texts, poll
   // taps and shared locations get a reply.
   const text = textToAnswer(message as InboundLike) ?? pollChoice(message as never);
+  // Our own replies come back from Photon as texts "from" the fan; drop them.
+  if (text !== undefined && echoes.isEcho(handle, text)) {
+    console.log(`[huddle] ignored echo of our reply to ${handle.replace(/.(?=.{4})/g, '•')}`);
+    continue;
+  }
   let at: Awaited<ReturnType<typeof locationFrom>>;
   if (text === undefined) {
     try {
@@ -169,7 +189,7 @@ for await (const [space, message] of app.messages) {
     const out = message.platform === 'terminal' ? space : await spaceFor(handle);
     const started = Date.now();
     const replies = at ? await agent.handleLocation(handle, at) : await agent.handleMessage(handle, text!);
-    await deliver(out, replies);
+    await deliver(out, replies, handle);
     console.log(`[huddle] -> ${replies.length} repl${replies.length === 1 ? 'y' : 'ies'} to ${handle.replace(/.(?=.{4})/g, '•')} in ${Date.now() - started} ms`);
   } catch (err) {
     console.error(`[huddle] failed to answer ${handle}:`, err);

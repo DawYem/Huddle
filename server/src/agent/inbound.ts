@@ -69,3 +69,37 @@ export async function locationFrom(message: {
   }
   return undefined;
 }
+
+// Photon's shared lines report the agent's own sent messages back as inbound
+// texts *from the fan*, with nothing marking them as ours. Answering them
+// loops forever. So we remember what we just sent each fan and drop inbound
+// texts that match it.
+export class EchoFilter {
+  private readonly sent = new Map<string, { text: string; at: number }[]>();
+
+  constructor(private readonly windowMs = 10 * 60_000) {}
+
+  remember(handle: string, text: string, now = Date.now()): void {
+    const recent = this.recent(handle, now);
+    recent.push({ text: normalize(text), at: now });
+    this.sent.set(handle, recent.slice(-50));
+  }
+
+  // True (and consumed) when `text` is something we sent this fan recently.
+  isEcho(handle: string, text: string, now = Date.now()): boolean {
+    const recent = this.recent(handle, now);
+    const i = recent.findIndex((s) => s.text === normalize(text));
+    if (i === -1) return false;
+    recent.splice(i, 1);
+    this.sent.set(handle, recent);
+    return true;
+  }
+
+  private recent(handle: string, now: number) {
+    return (this.sent.get(handle) ?? []).filter((s) => now - s.at < this.windowMs);
+  }
+}
+
+function normalize(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}

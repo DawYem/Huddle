@@ -260,3 +260,37 @@ test('only real texts from a person get a reply (no read-receipt loop)', async (
   assert.equal(guard.allow('+2', t), true, 'other fans unaffected');
   assert.equal(guard.allow('+1', t + 61_000), true, 'allowed again after the window');
 });
+
+test('our own replies echoed back by Photon are ignored (no reply loop)', async () => {
+  const { EchoFilter } = await import('../src/agent/inbound.js');
+  const echoes = new EchoFilter(60_000);
+  const agent = agentWith(freshStore());
+  const handle = '+14045550123';
+  const t = 1_000_000;
+
+  // Simulates the agent loop: answer real texts, remember what we sent, drop echoes.
+  let replies = 0;
+  const inbound = async (text: string, now: number) => {
+    if (echoes.isEcho(handle, text, now)) return 'echo';
+    for (const r of await agent.handleMessage(handle, text)) {
+      if (r.kind === 'text') {
+        echoes.remember(handle, r.text, now);
+        replies++;
+        // Photon reports the sent reply back as an inbound text from the fan.
+        queue.push(r.text);
+      }
+    }
+    return 'answered';
+  };
+  const queue: string[] = [];
+  assert.equal(await inbound('Hey Huddle', t), 'answered');
+  const sentByUs = replies;
+  while (queue.length) assert.equal(await inbound(queue.shift()!, t + 1000), 'echo');
+  assert.equal(replies, sentByUs, 'echoes produced no further replies');
+
+  // A fan typing the same words later is answered again once the window passes.
+  assert.equal(await inbound('Hey Huddle', t + 120_000), 'answered');
+  // Matching ignores case and spacing differences Photon may introduce.
+  echoes.remember(handle, 'Line one\nLine  two', t);
+  assert.equal(echoes.isEcho(handle, ' line one line two ', t + 1), true);
+});
