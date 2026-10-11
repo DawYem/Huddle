@@ -8,6 +8,7 @@ import { googlePlacesFinder } from './places.js';
 import { DEFAULT_WINDOWS_HOURS, dueReminders } from './reminders.js';
 
 const config = loadConfig();
+if (!config.googleApiKey) throw new Error('GOOGLE_MAPS_API_KEY is not set. Copy .env.example to .env and fill it in.');
 const env = process.env;
 
 // iMessage turns on once the Photon project credentials are in .env.

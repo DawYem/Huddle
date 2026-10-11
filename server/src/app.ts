@@ -21,8 +21,16 @@ export function createApp(
   app.use(express.json({ limit: '100kb' }));
 
   // /api/health is the public path on Vercel, where only /api/* reaches this service.
+  // `configured` shows which keys are present (never their values).
   app.get(['/health', '/api/health'], (_req, res) => {
-    res.json({ ok: true });
+    res.json({
+      ok: true,
+      configured: {
+        googleMaps: Boolean(config.googleApiKey),
+        gemini: Boolean(config.geminiApiKey),
+        photon: Boolean(config.spectrum),
+      },
+    });
   });
 
   app.use(
@@ -34,6 +42,11 @@ export function createApp(
       legacyHeaders: false,
     }),
   );
+  if (!config.googleApiKey) {
+    app.use(['/api/location', '/api/spots', '/api/recommendations'], (_req, res) => {
+      res.status(503).json({ error: 'Server is missing GOOGLE_MAPS_API_KEY' });
+    });
+  }
   app.use('/api/location', locationRouter(config.googleApiKey, fetchFn));
   app.use('/api/spots', spotsRouter(config.googleApiKey, fetchFn, config.cacheTtlMs));
   app.use('/api/recommendations', recommendationsRouter(config, fetchFn));

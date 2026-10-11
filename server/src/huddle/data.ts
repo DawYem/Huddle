@@ -9,9 +9,14 @@ import { Store } from './store.js';
 import type { Fan, Signup } from './types.js';
 
 // server/data, from both src/huddle (tsx) and dist/src/huddle (compiled).
-const DEFAULT_DATA_DIR = fileURLToPath(
-  new URL(import.meta.url.includes('/dist/') ? '../../../data' : '../../data', import.meta.url),
-);
+function defaultDataDir(): string {
+  try {
+    return fileURLToPath(new URL(import.meta.url.includes('/dist/') ? '../../../data' : '../../data', import.meta.url));
+  } catch {
+    return join(process.cwd(), 'data');
+  }
+}
+const DEFAULT_DATA_DIR = defaultDataDir();
 
 // Vercel functions can only write to /tmp, which is per instance and wiped on
 // cold starts. Fine for a demo deploy; Photon's Users list keeps the durable

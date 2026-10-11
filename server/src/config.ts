@@ -5,8 +5,13 @@ import { config as loadEnv } from 'dotenv';
 // Read server/.env no matter which folder the process starts in (vercel dev
 // starts it from the repo root). On Vercel itself, keys come from the
 // project's Environment Variables instead and no .env file exists.
-const serverDir = fileURLToPath(new URL(import.meta.url.includes('/dist/') ? '../../' : '../', import.meta.url));
-loadEnv({ path: [join(process.cwd(), '.env'), join(serverDir, '.env')], quiet: true });
+// Guarded: a bundler may rewrite import.meta.url, and that must never stop the server.
+try {
+  const serverDir = fileURLToPath(new URL(import.meta.url.includes('/dist/') ? '../../' : '../', import.meta.url));
+  loadEnv({ path: [join(process.cwd(), '.env'), join(serverDir, '.env')], quiet: true });
+} catch {
+  loadEnv({ quiet: true });
+}
 import type { SpectrumCredentials } from './photon/users.js';
 
 export interface Config {
@@ -25,10 +30,9 @@ export interface Config {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  // Missing keys don't crash the server: Google-backed routes answer 503 and
+  // /api/health lists what's missing, so a deploy without its env vars is obvious.
   const googleApiKey = env.GOOGLE_MAPS_API_KEY ?? '';
-  if (!googleApiKey) {
-    throw new Error('GOOGLE_MAPS_API_KEY is not set. Copy .env.example to .env and fill it in.');
-  }
   return {
     googleApiKey,
     // 4000 so it can run next to the Next.js site on 3000.
