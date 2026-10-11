@@ -66,7 +66,6 @@ const rules = [
 
 const crew = ["JM", "AK", "DO", "RT"];
 
-
 function Logo({ target = false }: { target?: boolean }) {
   return (
     <a href="#" className={s.logo} data-logo={target || undefined}>
