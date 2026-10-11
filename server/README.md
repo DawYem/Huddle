@@ -8,7 +8,7 @@ Backend for Huddle. It keeps the Google API key off the client and absorbs traff
 cd server
 npm install
 cp .env.example .env   # add a key with Geolocation API and Places API (New) enabled
-npm run dev
+npm run dev            # http://localhost:4000
 ```
 
 `npm test` runs the test suite (Google is mocked), `npm run build && npm start` runs the compiled server.
@@ -54,6 +54,10 @@ Fallback for devices without a GPS fix. Send the Google Geolocation request body
 ### `GET /health`
 
 Returns `{ ok: true }`.
+
+### `POST /api/fans`
+
+The website sign-up. Body: `{ firstName, lastName, phone, email }`. `phone` can be typed any common way ("(404) 555-0123"); it is stored as E.164 (`+14045550123`), the handle iMessage uses, with US/Canada assumed when there is no country code. Returns 201 for a new fan, 200 for an update, or 400 with per-field messages in `fields`. The response includes `textedHuddle` and `huddleNumber` (from `HUDDLE_NUMBER`) so the site can ask the fan to send the first text.
 
 ### `GET /api/games`
 

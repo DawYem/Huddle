@@ -15,6 +15,12 @@ type Errors = Partial<Record<keyof Fields, string>>;
 
 const EMPTY: Fields = { firstName: "", lastName: "", phone: "", email: "" };
 
+// What POST /api/fans returns. The site proxies /api to the server (next.config.ts).
+type SignupResult = {
+  textedHuddle: boolean;
+  huddleNumber: string | null;
+};
+
 function validate(f: Fields): Errors {
   const errors: Errors = {};
   if (!f.firstName.trim()) errors.firstName = "Enter your first name.";
@@ -32,7 +38,9 @@ function validate(f: Fields): Errors {
 export default function SignupForm() {
   const [fields, setFields] = useState<Fields>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [result, setResult] = useState<SignupResult | null>(null);
 
   const update =
     (key: keyof Fields) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,29 +48,67 @@ export default function SignupForm() {
       if (errors[key]) setErrors((err) => ({ ...err, [key]: undefined }));
     };
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const found = validate(fields);
     setErrors(found);
+    setFormError(null);
     if (Object.keys(found).length > 0) return;
 
-    // TODO: send `fields` to the backend signup endpoint once it's ready
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/fans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setResult(body as SignupResult);
+      } else if (res.status === 400 && body.fields) {
+        // The server's checks are stricter (e.g. it needs a dialable number).
+        setErrors(body.fields as Errors);
+      } else if (res.status === 429) {
+        setFormError("Too many tries. Wait a minute and try again.");
+      } else {
+        setFormError("Something went wrong on our end. Try again in a moment.");
+      }
+    } catch {
+      setFormError("Couldn't reach Huddle. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  if (submitted) {
+  if (result) {
+    const smsHref = result.huddleNumber ? `sms:${result.huddleNumber}` : null;
     return (
       <div className={`${s.card} ${s.success}`}>
         <p className={s.eyebrow}>You&apos;re in</p>
         <h2 className={s.successTitle}>
           Welcome to the team, {fields.firstName.trim()}.
         </h2>
-        <p className={s.body}>
-          Watch your texts. Your first invite lands before the next kickoff.
-        </p>
-        <Link href="/" className={s.submit}>
-          Back to home
-        </Link>
+        {result.textedHuddle ? (
+          <p className={s.body}>
+            Watch your texts. Your first invite lands before the next kickoff.
+          </p>
+        ) : (
+          <p className={s.body}>
+            One last step: text Huddle from this phone
+            {result.huddleNumber ? ` at ${result.huddleNumber}` : ""}. Huddle
+            only texts people who texted it first, so say hi and we&apos;ll
+            take it from there.
+          </p>
+        )}
+        {smsHref && !result.textedHuddle ? (
+          <a href={smsHref} className={s.submit}>
+            Text Huddle
+          </a>
+        ) : (
+          <Link href="/" className={s.submit}>
+            Back to home
+          </Link>
+        )}
       </div>
     );
   }
@@ -110,8 +156,13 @@ export default function SignupForm() {
         placeholder: "you@example.com",
       })}
 
-      <button type="submit" className={s.submit}>
-        Sign up
+      {formError && (
+        <p className={s.error} role="alert">
+          {formError}
+        </p>
+      )}
+      <button type="submit" className={s.submit} disabled={submitting}>
+        {submitting ? "Signing up…" : "Sign up"}
       </button>
       <p className={s.fine}>
         By signing up you agree to get texts from Huddle about games near you.

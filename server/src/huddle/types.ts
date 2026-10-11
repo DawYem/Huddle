@@ -28,6 +28,7 @@ export interface Fan {
   // iMessage handle: E.164 phone number or email.
   handle: string;
   name?: string;
+  email?: string;
   // True only when the fan's 21+ status is confirmed.
   is21Plus: boolean;
   favoriteTeam?: string;

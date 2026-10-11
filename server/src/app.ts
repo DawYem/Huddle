@@ -4,6 +4,7 @@ import type { Config } from './config.js';
 import { UpstreamError } from './google/errors.js';
 import type { Catalog } from './huddle/catalog.js';
 import type { Store } from './huddle/store.js';
+import { fansRouter } from './routes/fans.js';
 import { gamesRouter } from './routes/games.js';
 import { locationRouter } from './routes/location.js';
 import { recommendationsRouter } from './routes/recommendations.js';
@@ -34,7 +35,10 @@ export function createApp(
   app.use('/api/location', locationRouter(config.googleApiKey, fetchFn));
   app.use('/api/spots', spotsRouter(config.googleApiKey, fetchFn, config.cacheTtlMs));
   app.use('/api/recommendations', recommendationsRouter(config, fetchFn));
-  if (huddle) app.use('/api/games', gamesRouter(huddle.catalog, huddle.store));
+  if (huddle) {
+    app.use('/api/games', gamesRouter(huddle.catalog, huddle.store));
+    app.use('/api/fans', fansRouter(huddle.store, config.huddleNumber));
+  }
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {
     if (err instanceof UpstreamError) {

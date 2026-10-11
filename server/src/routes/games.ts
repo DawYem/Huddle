@@ -1,9 +1,7 @@
 import { Router } from 'express';
 import { findGame, findTeams, upcomingGames, type Catalog } from '../huddle/catalog.js';
+import { isEmail, toE164 } from '../huddle/phone.js';
 import type { Store } from '../huddle/store.js';
-
-// E.164 phone or email: the two handle types iMessage uses.
-const HANDLE = /^(\+[1-9]\d{6,14}|[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,})$/;
 
 // GET  /api/games[?team=Knicks]        upcoming games, soonest first
 // POST /api/games/:id/signups          { handle, name?, is21Plus?, lat?, lng? }
@@ -27,9 +25,11 @@ export function gamesRouter(catalog: Catalog, store: Store): Router {
       return;
     }
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const handle = typeof body.handle === 'string' ? body.handle.trim() : '';
-    if (!HANDLE.test(handle)) {
-      res.status(400).json({ error: 'handle must be an E.164 phone number like +15551234567, or an email' });
+    // Phone (any common format) or email: the two handle types iMessage uses.
+    const raw = typeof body.handle === 'string' ? body.handle.trim() : '';
+    const handle = toE164(raw) ?? (isEmail(raw) ? raw.toLowerCase() : undefined);
+    if (!handle) {
+      res.status(400).json({ error: 'handle must be a phone number like (404) 555-0123 or +15551234567, or an email' });
       return;
     }
     const lat = body.lat === undefined ? undefined : Number(body.lat);
