@@ -45,7 +45,7 @@ test('POST /api/fans saves the fan under their E.164 number', async () => {
     // No Photon credentials in this setup.
     spectrumSynced: false,
   });
-  const fan = store.getFan('+14045550123');
+  const fan = await store.getFan('+14045550123');
   assert.equal(fan?.name, 'Sam Lee');
   assert.equal(fan?.email, 'sam@example.com');
   // Website sign-up never confirms age or opts them in to texts.
@@ -56,14 +56,14 @@ test('POST /api/fans saves the fan under their E.164 number', async () => {
 test('POST /api/fans again updates the fan and keeps their opt-in', async () => {
   const { app, store } = setup();
   await request(app).post('/api/fans').send(valid);
-  store.upsertFan('+14045550123', { textedFirst: true });
+  await store.upsertFan('+14045550123', { textedFirst: true });
   const res = await request(app).post('/api/fans').send({ ...valid, firstName: 'Samantha', phone: '+1 404 555 0123' });
   assert.equal(res.status, 200);
   assert.equal(res.body.created, false);
   assert.equal(res.body.textedHuddle, true);
   assert.equal(res.body.huddleNumber, null);
-  assert.equal(store.getFan('+14045550123')?.name, 'Samantha Lee');
-  assert.equal(store.fans().length, 1);
+  assert.equal((await store.getFan('+14045550123'))?.name, 'Samantha Lee');
+  assert.equal((await store.fans()).length, 1);
 });
 
 test('POST /api/fans returns per-field errors and saves nothing', async () => {
@@ -73,7 +73,7 @@ test('POST /api/fans returns per-field errors and saves nothing', async () => {
     .send({ firstName: ' ', lastName: 'Lee', phone: '555-0123', email: 'nope' });
   assert.equal(res.status, 400);
   assert.deepEqual(Object.keys(res.body.fields).sort(), ['email', 'firstName', 'phone']);
-  assert.equal(store.fans().length, 0);
+  assert.equal((await store.fans()).length, 0);
 
   const notJson = await request(app).post('/api/fans').set('Content-Type', 'application/json').send('{bad');
   assert.equal(notJson.status, 400);
@@ -84,7 +84,7 @@ test('game sign-up accepts the same phone formats as the website form', async ()
   const res = await request(app).post('/api/games/nfl-giants-eagles-1019/signups').send({ handle: '(404) 555-0123' });
   assert.equal(res.status, 201);
   assert.equal(res.body.handle, '+14045550123');
-  assert.equal(store.signupsFor('+14045550123').length, 1);
+  assert.equal((await store.signupsFor('+14045550123')).length, 1);
 });
 
 const PROJECT = '11111111-2222-4333-8444-555555555555';
@@ -133,8 +133,8 @@ test('sign-up adds the fan to Photon Users with the same four fields', async () 
     lastName: 'Lee',
     email: 'sam@example.com',
   });
-  assert.equal(store.getFan('+14045550123')?.spectrumUserId, 'user-1');
-  assert.equal(store.getFan('+14045550123')?.huddleNumber, '+16285550111');
+  assert.equal((await store.getFan('+14045550123'))?.spectrumUserId, 'user-1');
+  assert.equal((await store.getFan('+14045550123'))?.huddleNumber, '+16285550111');
 });
 
 test('a Photon outage still saves the sign-up and falls back to HUDDLE_NUMBER', async () => {
@@ -145,7 +145,7 @@ test('a Photon outage still saves the sign-up and falls back to HUDDLE_NUMBER', 
   assert.equal(res.status, 201);
   assert.equal(res.body.spectrumSynced, false);
   assert.equal(res.body.huddleNumber, '+15550000000');
-  assert.equal(store.getFan('+14045550123')?.name, 'Sam Lee');
+  assert.equal((await store.getFan('+14045550123'))?.name, 'Sam Lee');
 });
 
 test('dedicated plans send the project line as assignedPhoneNumber', async () => {

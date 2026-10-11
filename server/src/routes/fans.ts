@@ -39,8 +39,8 @@ export function fansRouter(store: Store, opts: FansRouterOptions = {}): Router {
     }
 
     try {
-      const existed = store.getFan(handle) !== undefined;
-      let fan = store.upsertFan(handle, { name: `${firstName} ${lastName}`, email });
+      const existed = await store.getFan(handle) !== undefined;
+      let fan = await store.upsertFan(handle, { name: `${firstName} ${lastName}`, email });
 
       // Saved locally first, so a Photon outage never loses a sign-up.
       // Signing up again retries, since Photon updates users by phone number.
@@ -48,7 +48,7 @@ export function fansRouter(store: Store, opts: FansRouterOptions = {}): Router {
       if (opts.registerSpectrumUser) {
         try {
           const user = await opts.registerSpectrumUser({ phoneNumber: handle, firstName, lastName, email });
-          fan = store.upsertFan(handle, { spectrumUserId: user.id, huddleNumber: user.assignedPhoneNumber });
+          fan = await store.upsertFan(handle, { spectrumUserId: user.id, huddleNumber: user.assignedPhoneNumber });
           spectrumSynced = true;
         } catch (err) {
           console.error(`Photon user sync failed for ${handle}: ${err instanceof Error ? err.message : String(err)}`);

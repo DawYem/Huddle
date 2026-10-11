@@ -83,7 +83,7 @@ function agent() {
     watchSpotsNear: async () => [],
     barsNear: async (lat, lng, sport) => {
       calls.push(`bars ${sport.id} ${lat},${lng}`);
-      return `BARS for ${sport.label}`;
+      return { text: `BARS for ${sport.label}`, count: 3 };
     },
     geocode: async (text) => (/penn/i.test(text) ? { lat: 40.7506, lng: -73.9935, label: 'Penn Station, New York' } : undefined),
   };
@@ -98,10 +98,9 @@ function agent() {
 
 test('bars flow: poll for sport, then link or a typed place, then bars', async () => {
   const { a, store, calls } = agent();
-  const first = await a.handleMessage(FAN, 'find a bar near me');
-  const pollReply = first.find((r) => r.kind === 'poll');
-  assert.ok(pollReply && pollReply.kind === 'poll');
-  assert.deepEqual(pollReply.options.slice(0, 3), ['Basketball', 'Football', 'Soccer']);
+  // Numbered list (native poll votes don't reach the agent in spectrum-ts 12.10.1).
+  const first = texts(await a.handleMessage(FAN, 'find a bar near me'));
+  assert.match(first, /Which sport are you watching\?\n1\. Basketball\n2\. Football\n3\. Soccer/);
 
   // Tapping the poll arrives as the option title.
   const ask = texts(await a.handleMessage(FAN, 'Soccer'));
@@ -111,7 +110,7 @@ test('bars flow: poll for sport, then link or a typed place, then bars', async (
   const bars = texts(await a.handleMessage(FAN, 'Penn Station'));
   assert.match(bars, /Near Penn Station, New York:\nBARS for Soccer/);
   assert.deepEqual(calls, ['bars soccer 40.7506,-73.9935']);
-  assert.equal(store.getFan(FAN)?.lat, 40.7506, 'location saved on the fan');
+  assert.equal((await store.getFan(FAN))?.lat, 40.7506, 'location saved on the fan');
 });
 
 test('bars flow: sport and place in one text, unknown place, and bailing out', async () => {
@@ -129,7 +128,7 @@ test('a shared pin before picking a sport asks for the sport, then answers', asy
   const { a, calls } = agent();
   const r = await a.handleLocation(FAN, { lat: 40.75, lng: -73.99 });
   assert.match(texts(r), /Got your location/);
-  assert.ok(r.some((x) => x.kind === 'poll'));
+  assert.match(texts(r), /Which sport/);
   assert.match(texts(await a.handleMessage(FAN, '3')), /BARS for Soccer/);
   assert.deepEqual(calls, ['bars soccer 40.75,-73.99']);
 });

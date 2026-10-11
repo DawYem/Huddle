@@ -74,7 +74,7 @@ test('find a team, join a game by number, then add it to the calendar', async ()
 
   const joined = texts(await agent.handleMessage(FAN, '2'));
   assert.match(joined, /You're in for Atlanta Hawks vs New York Knicks/);
-  assert.ok(store.signupsFor(FAN).some((s) => s.gameId === 'nba-hawks-knicks-1018'));
+  assert.ok((await store.signupsFor(FAN)).some((s) => s.gameId === 'nba-hawks-knicks-1018'));
 
   const cal = await agent.handleMessage(FAN, 'yes');
   const file = cal.find((r) => r.kind === 'file');
@@ -98,7 +98,7 @@ test("a team with no crews gets other games and nearby spots instead", async () 
 test('reminder for a venue without food suggests food nearby, perks first, never the venue', async () => {
   const store = freshStore();
   const agent = agentWith(store, new Date('2026-10-16T12:00:00Z'));
-  const fan = store.getFan(FAN)!;
+  const fan = await store.getFan(FAN)!;
   const replies = await agent.buildReminder(fan, findGame(catalog, 'epl-arsenal-chelsea-1017')!);
   const body = texts(replies);
 
@@ -117,7 +117,7 @@ test('reminder for a venue without food suggests food nearby, perks first, never
 
 test('reminder for a venue with food skips the food list', async () => {
   const store = freshStore();
-  const body = texts(await agentWith(store).buildReminder(store.getFan(FAN)!, findGame(catalog, 'nba-knicks-celtics-1011')!));
+  const body = texts(await agentWith(store).buildReminder(await store.getFan(FAN)!, findGame(catalog, 'nba-knicks-celtics-1011')!));
   assert.doesNotMatch(body, /serve food/);
 });
 
@@ -139,32 +139,32 @@ test('reminders wait for opt-in, respect stop, and never double-send', async () 
   const at = (iso: string) => dueReminders(store, catalog, new Date(iso));
 
   // Signed up on the website but never texted Huddle: no reminders.
-  assert.equal(at('2026-10-11T00:00:00Z').length, 0);
+  assert.equal((await at('2026-10-11T00:00:00Z')).length, 0);
 
   await agentWith(store).handleMessage(FAN, 'hi');
   // 23.5 hours out: the 24h reminder is due.
-  let due = at('2026-10-11T00:00:00Z');
+  let due = (await at('2026-10-11T00:00:00Z'));
   assert.deepEqual(due.map((d) => d.keys), [[reminderKey(knicks, FAN, 24)]]);
-  store.markRemindersSent(due[0].keys);
-  assert.equal(at('2026-10-11T00:05:00Z').length, 0);
+  await store.markRemindersSent(due[0].keys);
+  assert.equal((await at('2026-10-11T00:05:00Z')).length, 0);
 
   // 1.5 hours out: the 2h reminder is due once.
-  due = at('2026-10-11T22:00:00Z');
+  due = (await at('2026-10-11T22:00:00Z'));
   assert.equal(due.length, 1);
-  store.markRemindersSent(due[0].keys);
-  assert.equal(at('2026-10-11T22:30:00Z').length, 0);
+  await store.markRemindersSent(due[0].keys);
+  assert.equal((await at('2026-10-11T22:30:00Z')).length, 0);
 
   // After kickoff: nothing.
-  assert.equal(at('2026-10-11T23:31:00Z').length, 0);
+  assert.equal((await at('2026-10-11T23:31:00Z')).length, 0);
 
   // "stop" silences everything until "start".
   const agent = agentWith(store);
-  store.addSignup('epl-united-liverpool-1018', FAN);
+  await store.addSignup('epl-united-liverpool-1018', FAN);
   await agent.handleMessage(FAN, 'stop');
-  assert.equal(at('2026-10-18T14:30:00Z').length, 0);
+  assert.equal((await at('2026-10-18T14:30:00Z')).length, 0);
   await agent.handleMessage(FAN, 'start');
   // A late sign-up 1 hour out gets one text that covers both windows.
-  assert.deepEqual(at('2026-10-18T14:30:00Z')[0].keys, [
+  assert.deepEqual((await at('2026-10-18T14:30:00Z'))[0].keys, [
     reminderKey('epl-united-liverpool-1018', FAN, 2),
     reminderKey('epl-united-liverpool-1018', FAN, 24),
   ]);
@@ -218,13 +218,13 @@ test('GET /api/games filters by team and POST signups validates input', async ()
   const again = await request(app).post('/api/games/nfl-giants-eagles-1019/signups').send({ handle: '+15551234567' });
   assert.equal(again.status, 200);
   // A later form without is21Plus doesn't downgrade a confirmed fan.
-  assert.equal(store.getFan('+15551234567')?.is21Plus, true);
+  assert.equal((await store.getFan('+15551234567'))?.is21Plus, true);
 });
 
 test('YES after several reminders at once adds every offered game', async () => {
   const store = freshStore();
   const agent = agentWith(store);
-  const fan = store.getFan(FAN)!;
+  const fan = await store.getFan(FAN)!;
   await agent.buildReminder(fan, findGame(catalog, 'nba-knicks-celtics-1011')!);
   const second = texts(await agent.buildReminder(fan, findGame(catalog, 'epl-arsenal-chelsea-1017')!));
   assert.match(second, /Want all 2 of these games on your calendar\?/);

@@ -38,6 +38,10 @@ const agent = new HuddleAgent({
     ? (fan, sport) =>
         `${config.siteUrl}/locate?t=${signLocationRequest({ handle: fan.handle, sport: sport.id, is21Plus: fan.is21Plus }, config.linkSecret!)}`
     : undefined,
+  hostLink: config.linkSecret
+    ? (fan, sport, at) =>
+        `${config.siteUrl}/host?t=${signLocationRequest({ handle: fan.handle, sport: sport.id, is21Plus: fan.is21Plus, lat: at.lat, lng: at.lng }, config.linkSecret!)}`
+    : undefined,
   log: (msg) => console.error(`[huddle] ${msg}`),
 });
 
@@ -95,11 +99,11 @@ async function sendDueReminders(): Promise<void> {
   if (checking) return;
   checking = true;
   try {
-    for (const { fan, game, keys } of dueReminders(store, catalog, new Date(), windowsHours)) {
+    for (const { fan, game, keys } of await dueReminders(store, catalog, new Date(), windowsHours)) {
       if (!canReach(fan.handle)) continue;
       try {
         await deliver(await spaceFor(fan.handle), await agent.buildReminder(fan, game));
-        store.markRemindersSent(keys);
+        await store.markRemindersSent(keys);
       } catch (err) {
         console.error(`[huddle] reminder to ${fan.handle} for ${game.id} failed:`, err);
       }

@@ -212,3 +212,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+.select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #111;
+  color: inherit;
+  font: inherit;
+}

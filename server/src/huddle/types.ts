@@ -35,6 +35,10 @@ export interface Fan {
   // True only when the fan's 21+ status is confirmed.
   is21Plus: boolean;
   favoriteTeam?: string;
+  // Last sport the fan searched bars for; used by JOIN / HOST replies.
+  lastSport?: string;
+  // A yes/no question the website API texted (the agent picks it up from here).
+  prompt?: { type: 'community-join'; sport: string; lat: number; lng: number; at: string };
   // Where to search for spots when the fan has no game nearby.
   lat?: number;
   lng?: number;
@@ -56,4 +60,29 @@ export interface Perk {
   placeId: string;
   name: string;
   perk: string;
+}
+
+// A fan-hosted watch party, listed from the website's "list your venue" page.
+export interface CommunityEvent {
+  id: string;
+  sport: string; // sport id from sports.ts
+  venueName: string;
+  address: string;
+  lat: number;
+  lng: number;
+  // ISO 8601 with offset.
+  startsAt: string;
+  hostName: string;
+  hostHandle?: string;
+  attendees: string[];
+  createdAt: string;
+}
+
+// A fan waiting for a community event near them.
+export interface WaitlistEntry {
+  handle: string;
+  sport: string;
+  lat: number;
+  lng: number;
+  since: string;
 }

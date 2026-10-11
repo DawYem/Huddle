@@ -5,7 +5,7 @@ import games from '../../data/games.json' with { type: 'json' };
 import perks from '../../data/perks.json' with { type: 'json' };
 import seed from '../../data/store.seed.json' with { type: 'json' };
 import { catalogFrom, loadCatalog, type Catalog, type GamesFile, type PerksFile } from './catalog.js';
-import { Store } from './store.js';
+import { RedisBackend, Store } from './store.js';
 import type { Fan, Signup } from './types.js';
 
 // server/data, from both src/huddle (tsx) and dist/src/huddle (compiled).
@@ -39,8 +39,16 @@ export function openHuddleData(dataDir = process.env.HUDDLE_DATA_DIR): {
       store: new Store(join(dataDir, 'store.json'), join(dataDir, 'store.seed.json')),
     };
   }
+  // Shared Redis when configured (Vercel's Upstash integration sets KV_* or
+  // UPSTASH_*), so the deployed API and the iMessage agent see the same data.
+  const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  const seedData = seed as { fans: Fan[]; signups: Signup[] };
   return {
     catalog: catalogFrom(games as GamesFile, perks as PerksFile),
-    store: new Store(defaultStorePath(), seed as { fans: Fan[]; signups: Signup[] }),
+    store:
+      redisUrl && redisToken
+        ? new Store(new RedisBackend(redisUrl, redisToken, seedData))
+        : new Store(defaultStorePath(), seedData),
   };
 }

@@ -24,7 +24,7 @@ export interface PlacesFinder {
   foodNear(venue: Venue, fan: Fan): Promise<FoodSpot[]>;
   watchSpotsNear(lat: number, lng: number, fan: Fan): Promise<Recommendation[]>;
   // Ready-to-send text listing bars for a sport near a point.
-  barsNear(lat: number, lng: number, sport: Sport, fan: Fan): Promise<string>;
+  barsNear(lat: number, lng: number, sport: Sport, fan: Fan): Promise<{ text: string; count: number }>;
   geocode(text: string, near?: { lat: number; lng: number }): Promise<{ lat: number; lng: number; label: string } | undefined>;
 }
 
@@ -50,7 +50,7 @@ export function googlePlacesFinder(
     },
     async barsNear(lat, lng, sport, fan) {
       const bars = await barsForSport({ apiKey, gemini: opts.gemini, fetchFn }, { lat, lng }, sport, fan.is21Plus);
-      return barsText(sport, bars, sportGames(catalog, sport, new Date()));
+      return { text: barsText(sport, bars, sportGames(catalog, sport, new Date())), count: bars.length };
     },
     geocode(text, near) {
       return geocodeText(apiKey, text, near, fetchFn);

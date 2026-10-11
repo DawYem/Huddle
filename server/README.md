@@ -92,6 +92,10 @@ What it does:
 
 4. **Bars near me, by sport.** Text "bars near me" (or "soccer bar near Penn Station"). The agent sends a native iMessage poll for the sport, then a private link to `/locate` on the site, where Safari asks the fan to allow location. `POST /api/locate` finds bars for that sport nearby and texts them back into the chat (and shows them on the page). Fans can instead text a neighborhood or share a location pin. Links are HMAC-signed with `HUDDLE_LINK_SECRET` (defaults to `SPECTRUM_PROJECT_SECRET`), expire after an hour, and point at `HUDDLE_SITE_URL` (default `https://huddling.vercel.app`).
 
+5. **Community watch events when there are no bars.** If the bar search comes back empty, the agent asks "Want to join a community watch event near you?" YES lists fan-hosted events for that sport within 5 miles (reply a number to join); if there are none it looks again after a few seconds, then puts the fan in a queue. NO asks "Are you hosting one?" YES sends a link to `/host` (list your venue: name, address, sport, time), which creates the event and texts every queued fan nearby; NO ends the conversation. API: `POST /api/events`, `GET /api/events/host?t=`.
+
+**Storage.** Fans, sign-ups, events and the queue live in `data/store.json`, or in Upstash Redis when `KV_REST_API_URL`/`KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL`/`_TOKEN`) are set. Use Redis whenever the website runs on Vercel and the agent runs elsewhere, so both see the same data.
+
 Safety rules from the landing page: the agent only texts fans who texted Huddle first, `stop` pauses all texts until `start`, and `report` is logged for a person to review.
 
 ### Data

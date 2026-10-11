@@ -8,6 +8,7 @@ import { spectrumUsers } from './photon/users.js';
 import type { Store } from './huddle/store.js';
 import { fansRouter } from './routes/fans.js';
 import { gamesRouter } from './routes/games.js';
+import { eventsRouter } from './routes/events.js';
 import { locateRouter } from './routes/locate.js';
 import { locationRouter } from './routes/location.js';
 import { recommendationsRouter } from './routes/recommendations.js';
@@ -61,6 +62,15 @@ export function createApp(
         registerSpectrumUser: config.spectrum ? spectrumUsers(config.spectrum, fetchFn) : undefined,
       }),
     );
+    const sendTexts = config.spectrum
+      ? spectrumSender(config.spectrum.projectId, config.spectrum.projectSecret)
+      : undefined;
+    if (config.googleApiKey) {
+      app.use(
+        '/api/events',
+        eventsRouter({ store: huddle.store, apiKey: config.googleApiKey, linkSecret: config.linkSecret, fetchFn, sendTexts }),
+      );
+    }
     if (config.linkSecret && config.googleApiKey) {
       app.use(
         '/api/locate',
@@ -70,9 +80,8 @@ export function createApp(
           catalog: huddle.catalog,
           gemini: config.geminiApiKey ? { apiKey: config.geminiApiKey, model: config.geminiModel! } : undefined,
           fetchFn,
-          sendTexts: config.spectrum
-            ? spectrumSender(config.spectrum.projectId, config.spectrum.projectSecret)
-            : undefined,
+          sendTexts,
+          store: huddle.store,
         }),
       );
     }

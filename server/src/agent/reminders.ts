@@ -16,16 +16,16 @@ export function reminderKey(gameId: string, handle: string, windowHours: number)
   return `${gameId}|${handle}|${windowHours}h`;
 }
 
-export function dueReminders(
+export async function dueReminders(
   store: Store,
   catalog: Catalog,
   now: Date,
   windowsHours: number[] = DEFAULT_WINDOWS_HOURS,
-): DueReminder[] {
-  const fans = new Map(store.fans().map((f) => [f.handle, f]));
+): Promise<DueReminder[]> {
+  const fans = new Map((await store.fans()).map((f) => [f.handle, f]));
   const due: DueReminder[] = [];
 
-  for (const signup of store.signups()) {
+  for (const signup of await store.signups()) {
     const fan = fans.get(signup.handle);
     const game = findGame(catalog, signup.gameId);
     // Only text fans who texted Huddle first and haven't said stop.
@@ -37,7 +37,7 @@ export function dueReminders(
     const open = windowsHours.filter((h) => msUntil <= h * 3_600_000).sort((a, b) => a - b);
     if (!open.length) continue;
     // The tightest window is the one that matters right now.
-    if (store.reminderSent(reminderKey(game.id, fan.handle, open[0]))) continue;
+    if (await store.reminderSent(reminderKey(game.id, fan.handle, open[0]))) continue;
 
     due.push({ fan, game, keys: open.map((h) => reminderKey(game.id, fan.handle, h)) });
   }

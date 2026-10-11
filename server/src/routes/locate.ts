@@ -4,6 +4,7 @@ import { barsForSport, barsText, sportGames } from '../huddle/bars.js';
 import type { Catalog } from '../huddle/catalog.js';
 import { verifyLocationRequest } from '../huddle/locationLink.js';
 import { sportById } from '../huddle/sports.js';
+import type { Store } from '../huddle/store.js';
 import type { SendTexts } from '../photon/send.js';
 
 export interface LocateOptions {
@@ -14,6 +15,8 @@ export interface LocateOptions {
   fetchFn?: typeof fetch;
   // Texts the results back into the fan's iMessage chat.
   sendTexts?: SendTexts;
+  // Saves the fan's location, and the follow-up question when no bars are found.
+  store?: Store;
 }
 
 // GET  /api/locate?t=<token>          -> { sport } if the link is valid
@@ -55,10 +58,21 @@ export function locateRouter(opts: LocateOptions): Router {
         sport,
         request.is21Plus,
       );
+      // No bars: ask about a community watch event. The agent picks the
+      // answer up from the saved prompt when the fan replies.
+      const message = bars.length
+        ? barsText(sport, bars, sportGames(opts.catalog, sport, new Date()))
+        : `I couldn't find ${sport.label.toLowerCase()} bars near you. Want to join a community watch event near you? Reply YES or NO.`;
+      await opts.store?.upsertFan(request.handle, {
+        lat,
+        lng,
+        lastSport: sport.id,
+        prompt: bars.length ? undefined : { type: 'community-join', sport: sport.id, lat, lng, at: new Date().toISOString() },
+      });
       let texted = false;
       if (opts.sendTexts) {
         try {
-          await opts.sendTexts(request.handle, [barsText(sport, bars, sportGames(opts.catalog, sport, new Date()))]);
+          await opts.sendTexts(request.handle, [message]);
           texted = true;
         } catch (err) {
           console.error(`iMessage send failed for ${request.handle}: ${err instanceof Error ? err.message : String(err)}`);

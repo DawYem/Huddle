@@ -81,7 +81,14 @@ export default function LocateCard() {
           {result.texted ? "We also texted these to you in iMessage. " : ""}
           Call ahead to check they&apos;re showing your game.
         </p>
-        {result.bars.length === 0 && <p className={s.body}>No bars found nearby. Text Huddle a neighborhood to search somewhere else.</p>}
+        {result.bars.length === 0 && (
+          <p className={s.body}>
+            No {result.sport.label.toLowerCase()} bars nearby.{" "}
+            {result.texted
+              ? "Check iMessage: reply YES to join a community watch event near you."
+              : "Text Huddle YES to join a community watch event near you."}
+          </p>
+        )}
         {result.bars.map((b) => (
           <div key={b.directionsUrl} className={s.field}>
             <strong>{b.name}</strong>

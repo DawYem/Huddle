@@ -1,4 +1,5 @@
 import { findGame, findTeams, gamesForTeam, gameStart, upcomingGames, type Catalog } from '../huddle/catalog.js';
+import { eventLine, eventsNear, joinedText, type NearbyEvent } from '../huddle/community.js';
 import { extractLatLng, type LatLng } from '../huddle/mapsLink.js';
 import { matchSport, SPORTS, sportById, type Sport } from '../huddle/sports.js';
 import type { Store } from '../huddle/store.js';
@@ -23,7 +24,11 @@ type Pending =
   // Asked which sport; `at` is set when the fan already sent a location.
   | { type: 'sport'; at?: LatLng }
   // Sport chosen; waiting for a location (link, pin, or typed place).
-  | { type: 'location'; sport: string };
+  | { type: 'location'; sport: string }
+  // No bars found: "join a community watch event?" then "are you hosting one?"
+  | { type: 'community-join'; sport: string; at: LatLng }
+  | { type: 'community-pick'; sport: string; at: LatLng; eventIds: string[] }
+  | { type: 'community-host'; sport: string; at: LatLng };
 
 export interface AgentDeps {
   catalog: Catalog;
@@ -32,6 +37,10 @@ export interface AgentDeps {
   // Private Safari link where the fan grants location access. Undefined when
   // links aren't configured; the fan can still text a place or share a pin.
   locationLink?: (fan: Fan, sport: Sport) => string | undefined;
+  // "List your venue" page for hosts, prefilled with sport and area.
+  hostLink?: (fan: Fan, sport: Sport, at: LatLng) => string | undefined;
+  // How long to keep looking for an event before queueing the fan.
+  queueWaitMs?: number;
   now?: () => Date;
   log?: (msg: string) => void;
 }
@@ -75,17 +84,17 @@ export class HuddleAgent {
   async handleMessage(handle: string, rawText: string): Promise<Reply[]> {
     const text = rawText.trim();
     const { store } = this.deps;
-    const known = store.getFan(handle);
+    const known = await store.getFan(handle);
     // Texting Huddle is the opt-in the landing page promises.
-    const fan = store.upsertFan(handle, { textedFirst: true });
+    const fan = await store.upsertFan(handle, { textedFirst: true });
 
     if (STOP.test(text)) {
-      store.upsertFan(handle, { optedOut: true });
+      await store.upsertFan(handle, { optedOut: true });
       this.pending.delete(handle);
       return [say("You're out, no more texts from Huddle. Text START anytime to come back.")];
     }
     if (START.test(text)) {
-      store.upsertFan(handle, { optedOut: false });
+      await store.upsertFan(handle, { optedOut: false });
       return [say("Welcome back! I'll text you before your games again."), say(HELP)];
     }
     if (REPORT.test(text)) {
@@ -93,12 +102,24 @@ export class HuddleAgent {
       return [say("Thanks for telling us. A person on the Huddle team will look at this. If you're in danger, call 911.")];
     }
 
+    // A question texted by the website API (no bars near the shared location).
+    // It replaces whatever the agent was waiting for (usually the location
+    // the fan just shared through the link).
+    if (fan.prompt?.type === 'community-join') {
+      const { sport, lat, lng } = fan.prompt;
+      this.pending.set(handle, { type: 'community-join', sport, at: { lat, lng } });
+      await store.upsertFan(handle, { prompt: undefined });
+    }
+
     const pending = this.pending.get(handle);
-    if (pending?.type === 'sport' || pending?.type === 'location') {
+    if (pending?.type === 'community-join' || pending?.type === 'community-pick' || pending?.type === 'community-host') {
+      const answered = await this.answerCommunity(fan, pending, text);
+      if (answered) return answered;
+    } else if (pending?.type === 'sport' || pending?.type === 'location') {
       const answered = await this.answerBarsFlow(fan, pending, text);
       if (answered) return answered;
     } else if (pending) {
-      const answered = this.answerPending(fan, pending, text);
+      const answered = await this.answerPending(fan, pending, text);
       if (answered) return answered;
     }
 
@@ -115,7 +136,7 @@ export class HuddleAgent {
   // A location arrived outside text: an iMessage pin, a Maps link card, or the
   // Safari link (which the API answers itself). Saves it and continues the flow.
   async handleLocation(handle: string, at: LatLng): Promise<Reply[]> {
-    const fan = this.deps.store.upsertFan(handle, { textedFirst: true, lat: at.lat, lng: at.lng });
+    const fan = await this.deps.store.upsertFan(handle, { textedFirst: true, lat: at.lat, lng: at.lng });
     const pending = this.pending.get(handle);
     const sport = pending?.type === 'location' ? sportById(pending.sport) : undefined;
     if (sport) return this.barsReply(fan, sport, at);
@@ -212,9 +233,18 @@ export class HuddleAgent {
 
   private async barsReply(fan: Fan, sport: Sport, at: LatLng, label?: string): Promise<Reply[]> {
     this.pending.delete(fan.handle);
-    this.deps.store.upsertFan(fan.handle, { lat: at.lat, lng: at.lng });
+    await this.deps.store.upsertFan(fan.handle, { lat: at.lat, lng: at.lng });
     try {
-      const text = await this.deps.places.barsNear(at.lat, at.lng, sport, fan);
+      const { text, count } = await this.deps.places.barsNear(at.lat, at.lng, sport, fan);
+      if (!count) {
+        // Nothing nearby: offer a community watch party instead.
+        this.pending.set(fan.handle, { type: 'community-join', sport: sport.id, at });
+        return [
+          say(
+            `I couldn't find ${sport.label.toLowerCase()} bars near ${label ?? 'you'}. Want to join a community watch event near you? Reply YES or NO.`,
+          ),
+        ];
+      }
       return [say(label ? `Near ${label}:\n${text}` : text)];
     } catch (err) {
       this.log(`bar search failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -222,7 +252,93 @@ export class HuddleAgent {
     }
   }
 
-  private answerPending(fan: Fan, pending: Pending, text: string): Reply[] | undefined {
+  // Community watch events, step by step:
+  //  join?  YES -> pick a nearby event, or wait in the queue
+  //         NO  -> hosting?  YES -> "list your venue" link
+  //                          NO  -> nothing left to offer, say goodbye
+  private async answerCommunity(
+    fan: Fan,
+    pending: Extract<Pending, { type: 'community-join' | 'community-pick' | 'community-host' }>,
+    text: string,
+  ): Promise<Reply[] | undefined> {
+    const { store } = this.deps;
+    const sport = sportById(pending.sport)!;
+
+    if (pending.type === 'community-pick') {
+      const n = NUMBER.exec(text);
+      if (!n) {
+        if (NO.test(text)) return this.askHosting(fan, sport, pending.at);
+        return undefined;
+      }
+      const eventId = pending.eventIds[Number(n[1]) - 1];
+      if (!eventId) return [say(`Pick a number from 1 to ${pending.eventIds.length}.`)];
+      const event = await store.joinEvent(eventId, fan.handle);
+      this.pending.delete(fan.handle);
+      if (!event) return [say('That event was just taken down. Text "bars near me" to look again.')];
+      await store.removeFromWaitlist([fan.handle]);
+      return [say(joinedText(event))];
+    }
+
+    const yes = YES.test(text);
+    const no = NO.test(text);
+    if (!yes && !no) return [say('Reply YES or NO.')];
+
+    if (pending.type === 'community-host') {
+      this.pending.delete(fan.handle);
+      if (no) {
+        return [say("No problem. That's every option I've got for now. Text \"bars near me\" anytime to search again.")];
+      }
+      const link = this.deps.hostLink?.(fan, sport, pending.at);
+      return [
+        say(
+          link
+            ? `Awesome! List your venue here so fans nearby can join you:\n${link}\nAnyone waiting for a ${sport.label.toLowerCase()} watch party near you gets a text when it's live.`
+            : "Hosting isn't set up yet. Check back soon!",
+        ),
+      ];
+    }
+
+    // community-join
+    if (no) return this.askHosting(fan, sport, pending.at);
+
+    const found = await this.findEvents(pending.at, sport.id);
+    if (found.length) return this.offerEvents(fan, sport, pending.at, found, `${sport.label} watch parties near you:`);
+
+    // Give a just-listed event a few seconds to show up, then queue the fan.
+    await sleep(this.deps.queueWaitMs ?? 3000);
+    const late = await this.findEvents(pending.at, sport.id);
+    if (late.length) return this.offerEvents(fan, sport, pending.at, late, `Found one! ${sport.label} watch parties near you:`);
+
+    this.pending.delete(fan.handle);
+    await store.addToWaitlist({
+      handle: fan.handle,
+      sport: sport.id,
+      lat: pending.at.lat,
+      lng: pending.at.lng,
+      since: this.now().toISOString(),
+    });
+    return [
+      say(
+        `No ${sport.label.toLowerCase()} watch parties near you yet. You're in the queue ⏳ I'll text you the moment someone hosts one nearby.`,
+      ),
+    ];
+  }
+
+  private offerEvents(fan: Fan, sport: Sport, at: LatLng, found: NearbyEvent[], heading: string): Reply[] {
+    this.pending.set(fan.handle, { type: 'community-pick', sport: sport.id, at, eventIds: found.map((n) => n.event.id) });
+    return [say([heading, ...found.map((n, i) => eventLine(n, i)), 'Reply with a number to join.'].join('\n'))];
+  }
+
+  private async findEvents(at: LatLng, sport: string): Promise<NearbyEvent[]> {
+    return eventsNear(await this.deps.store.events(), at, sport, this.now());
+  }
+
+  private askHosting(fan: Fan, sport: Sport, at: LatLng): Reply[] {
+    this.pending.set(fan.handle, { type: 'community-host', sport: sport.id, at });
+    return [say(`Are you hosting a ${sport.label.toLowerCase()} watch event? Reply YES or NO.`)];
+  }
+
+  private async answerPending(fan: Fan, pending: Pending, text: string): Promise<Reply[] | undefined> {
     const { store, catalog } = this.deps;
 
     if (pending.type === 'calendar') {
@@ -238,8 +354,8 @@ export class HuddleAgent {
       return undefined;
     }
 
-    // Handled by answerBarsFlow.
-    if (pending.type === 'sport' || pending.type === 'location') return undefined;
+    // Handled by answerBarsFlow / answerCommunity.
+    if (pending.type !== 'join' && pending.type !== 'calendar-pick') return undefined;
 
     const n = NUMBER.exec(text);
     if (!n) {
@@ -257,7 +373,7 @@ export class HuddleAgent {
       return this.calendarReplies(game);
     }
 
-    const added = store.addSignup(game.id, fan.handle, this.now());
+    const added = await store.addSignup(game.id, fan.handle, this.now());
     this.pending.set(fan.handle, { type: 'calendar', gameIds: [game.id] });
     return [
       say(
@@ -274,7 +390,7 @@ export class HuddleAgent {
     const { catalog, store } = this.deps;
     const now = this.now();
     const teams = findTeams(catalog, text);
-    const joined = new Set(store.signupsFor(fan.handle).map((s) => s.gameId));
+    const joined = new Set((await store.signupsFor(fan.handle)).map((s) => s.gameId));
 
     const teamGames = dedupe(teams.flatMap((t) => gamesForTeam(catalog, t, now))).slice(0, MAX_LISTED);
     if (teamGames.length) {
@@ -316,9 +432,9 @@ export class HuddleAgent {
     return replies;
   }
 
-  private listMyGames(fan: Fan): Reply[] {
+  private async listMyGames(fan: Fan): Promise<Reply[]> {
     const { catalog, store } = this.deps;
-    const ids = new Set(store.signupsFor(fan.handle).map((s) => s.gameId));
+    const ids = new Set((await store.signupsFor(fan.handle)).map((s) => s.gameId));
     const games = upcomingGames(catalog, this.now()).filter((g) => ids.has(g.id));
     if (!games.length) {
       return [say('You\'re not signed up for any upcoming games. Text "find" and a team, like "find Knicks".')];
@@ -337,7 +453,7 @@ export class HuddleAgent {
 
   private async remindNext(fan: Fan): Promise<Reply[]> {
     const { catalog, store } = this.deps;
-    const ids = new Set(store.signupsFor(fan.handle).map((s) => s.gameId));
+    const ids = new Set((await store.signupsFor(fan.handle)).map((s) => s.gameId));
     const next = upcomingGames(catalog, this.now()).find(
       (g) => ids.has(g.id) && gameStart(g) > this.now(),
     );
@@ -399,8 +515,16 @@ export class HuddleAgent {
   }
 }
 
+// A numbered list rather than a native iMessage poll: spectrum-ts 12.10.1
+// can't resolve votes on our polls (it reads back an empty title and drops
+// the poll_option), so taps never reached the agent.
 function sportPoll(): Reply {
-  return { kind: 'poll', title: 'Which sport are you watching?', options: SPORTS.map((s) => s.label) };
+  const list = SPORTS.map((s, i) => `${i + 1}. ${s.label}`).join('\n');
+  return say(`Which sport are you watching?\n${list}\nReply with a number or the sport.`);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function say(text: string): Reply {

@@ -18,7 +18,8 @@ export function gamesRouter(catalog: Catalog, store: Store): Router {
     res.json({ count: games.length, games });
   });
 
-  router.post('/:id/signups', (req, res) => {
+  router.post('/:id/signups', async (req, res, next) => {
+    try {
     const game = findGame(catalog, req.params.id);
     if (!game) {
       res.status(404).json({ error: 'Game not found' });
@@ -39,21 +40,24 @@ export function gamesRouter(catalog: Catalog, store: Store): Router {
       return;
     }
 
-    const existing = store.getFan(handle);
-    store.upsertFan(handle, {
+    const existing = await store.getFan(handle);
+    await store.upsertFan(handle, {
       ...(typeof body.name === 'string' && body.name.trim() ? { name: body.name.trim().slice(0, 60) } : {}),
       // Only an explicit true confirms 21+; never downgrade a confirmed fan from a later form.
       is21Plus: body.is21Plus === true || existing?.is21Plus === true,
       ...(lat !== undefined && lng !== undefined ? { lat, lng } : {}),
     });
-    const created = store.addSignup(game.id, handle);
+    const created = await store.addSignup(game.id, handle);
     res.status(created ? 201 : 200).json({
       gameId: game.id,
       handle,
       created,
       // Huddle only texts fans who texted it first; the site should prompt them to.
-      textedHuddle: store.getFan(handle)?.textedFirst ?? false,
+      textedHuddle: (await store.getFan(handle))?.textedFirst ?? false,
     });
+    } catch (err) {
+      next(err);
+    }
   });
 
   return router;

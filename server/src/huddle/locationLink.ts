@@ -7,6 +7,9 @@ export interface LocationRequest {
   handle: string; // the fan's iMessage handle (E.164)
   sport: string; // sport id from sports.ts
   is21Plus: boolean;
+  // Set on host links, so the venue form can look up addresses nearby.
+  lat?: number;
+  lng?: number;
   exp: number; // ms since epoch
 }
 
