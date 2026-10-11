@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import type { SpectrumCredentials } from './photon/users.js';
 
 export interface Config {
   googleApiKey: string;
@@ -10,6 +11,9 @@ export interface Config {
   geminiModel?: string;
   // The Huddle iMessage number, shown to fans after they sign up on the website.
   huddleNumber?: string;
+  // Photon project credentials. When set, website sign-ups are added to the
+  // project's Users list so the agent can text them.
+  spectrum?: SpectrumCredentials;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -26,5 +30,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     geminiApiKey: env.GEMINI_API_KEY || undefined,
     geminiModel: env.GEMINI_MODEL || 'gemini-3.8-flash',
     huddleNumber: env.HUDDLE_NUMBER || undefined,
+    spectrum:
+      env.SPECTRUM_PROJECT_ID && env.SPECTRUM_PROJECT_SECRET
+        ? {
+            projectId: env.SPECTRUM_PROJECT_ID,
+            projectSecret: env.SPECTRUM_PROJECT_SECRET,
+            userType: env.SPECTRUM_USER_TYPE === 'dedicated' ? 'dedicated' : 'shared',
+            dedicatedLine: env.HUDDLE_NUMBER || undefined,
+          }
+        : undefined,
   };
 }

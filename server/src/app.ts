@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import type { Config } from './config.js';
 import { UpstreamError } from './google/errors.js';
 import type { Catalog } from './huddle/catalog.js';
+import { spectrumUsers } from './photon/users.js';
 import type { Store } from './huddle/store.js';
 import { fansRouter } from './routes/fans.js';
 import { gamesRouter } from './routes/games.js';
@@ -37,7 +38,13 @@ export function createApp(
   app.use('/api/recommendations', recommendationsRouter(config, fetchFn));
   if (huddle) {
     app.use('/api/games', gamesRouter(huddle.catalog, huddle.store));
-    app.use('/api/fans', fansRouter(huddle.store, config.huddleNumber));
+    app.use(
+      '/api/fans',
+      fansRouter(huddle.store, {
+        huddleNumber: config.huddleNumber,
+        registerSpectrumUser: config.spectrum ? spectrumUsers(config.spectrum, fetchFn) : undefined,
+      }),
+    );
   }
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {

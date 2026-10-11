@@ -42,6 +42,8 @@ test('POST /api/fans saves the fan under their E.164 number', async () => {
     created: true,
     textedHuddle: false,
     huddleNumber: '+15557654321',
+    // No Photon credentials in this setup.
+    spectrumSynced: false,
   });
   const fan = store.getFan('+14045550123');
   assert.equal(fan?.name, 'Sam Lee');
@@ -83,4 +85,79 @@ test('game sign-up accepts the same phone formats as the website form', async ()
   assert.equal(res.status, 201);
   assert.equal(res.body.handle, '+14045550123');
   assert.equal(store.signupsFor('+14045550123').length, 1);
+});
+
+const PROJECT = '11111111-2222-4333-8444-555555555555';
+const spectrum = { projectId: PROJECT, projectSecret: 's3cret', userType: 'shared' as const };
+
+function withPhoton(fetchFn: typeof fetch) {
+  const store = new Store(join(mkdtempSync(join(tmpdir(), 'huddle-')), 'store.json'));
+  const app = createApp(
+    { googleApiKey: 'k', port: 0, rateLimitPerMinute: 1000, cacheTtlMs: 1000, huddleNumber: '+15550000000', spectrum },
+    fetchFn,
+    { catalog: loadCatalog(join(DATA, 'games.json'), join(DATA, 'perks.json')), store },
+  );
+  return { app, store };
+}
+
+test('sign-up adds the fan to Photon Users with the same four fields', async () => {
+  const calls: { url: string; init: RequestInit }[] = [];
+  const fakeFetch = (async (url: string, init: RequestInit) => {
+    calls.push({ url, init });
+    const sent = JSON.parse(init.body as string);
+    return new Response(
+      JSON.stringify({
+        succeed: true,
+        data: { id: 'user-1', projectId: PROJECT, type: 'shared', ...sent, assignedPhoneNumber: '+16285550111', meta: null, createdAt: 'now' },
+      }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+  const { app, store } = withPhoton(fakeFetch);
+
+  const res = await request(app).post('/api/fans').send(valid);
+  assert.equal(res.status, 201);
+  assert.equal(res.body.spectrumSynced, true);
+  // The fan is shown the number Photon assigned them, not the fallback.
+  assert.equal(res.body.huddleNumber, '+16285550111');
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, `https://spectrum.photon.codes/projects/${PROJECT}/users/`);
+  assert.equal(calls[0].init.method, 'POST');
+  const headers = calls[0].init.headers as Record<string, string>;
+  assert.equal(headers.Authorization, `Basic ${Buffer.from(`${PROJECT}:s3cret`).toString('base64')}`);
+  assert.deepEqual(JSON.parse(calls[0].init.body as string), {
+    type: 'shared',
+    phoneNumber: '+14045550123',
+    firstName: 'Sam',
+    lastName: 'Lee',
+    email: 'sam@example.com',
+  });
+  assert.equal(store.getFan('+14045550123')?.spectrumUserId, 'user-1');
+  assert.equal(store.getFan('+14045550123')?.huddleNumber, '+16285550111');
+});
+
+test('a Photon outage still saves the sign-up and falls back to HUDDLE_NUMBER', async () => {
+  const failing = (async () =>
+    new Response(JSON.stringify({ succeed: false, message: 'maxSharedUsers reached' }), { status: 409 })) as unknown as typeof fetch;
+  const { app, store } = withPhoton(failing);
+  const res = await request(app).post('/api/fans').send(valid);
+  assert.equal(res.status, 201);
+  assert.equal(res.body.spectrumSynced, false);
+  assert.equal(res.body.huddleNumber, '+15550000000');
+  assert.equal(store.getFan('+14045550123')?.name, 'Sam Lee');
+});
+
+test('dedicated plans send the project line as assignedPhoneNumber', async () => {
+  let sent: Record<string, unknown> = {};
+  const fakeFetch = (async (_url: string, init: RequestInit) => {
+    sent = JSON.parse(init.body as string);
+    return new Response(JSON.stringify({ succeed: true, data: { id: 'u', assignedPhoneNumber: '+15557654321' } }), { status: 200 });
+  }) as typeof fetch;
+  const { spectrumUsers } = await import('../src/photon/users.js');
+  const register = spectrumUsers({ ...spectrum, userType: 'dedicated', dedicatedLine: '+15557654321' }, fakeFetch);
+  const user = await register({ phoneNumber: '+14045550123', firstName: 'Sam', lastName: 'Lee', email: 'sam@example.com' });
+  assert.equal(sent.type, 'dedicated');
+  assert.equal(sent.assignedPhoneNumber, '+15557654321');
+  assert.equal(user.assignedPhoneNumber, '+15557654321');
 });

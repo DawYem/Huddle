@@ -29,6 +29,9 @@ export interface Fan {
   handle: string;
   name?: string;
   email?: string;
+  // Photon user id and the Huddle number Photon assigned this fan.
+  spectrumUserId?: string;
+  huddleNumber?: string;
   // True only when the fan's 21+ status is confirmed.
   is21Plus: boolean;
   favoriteTeam?: string;

@@ -21,6 +21,12 @@ type SignupResult = {
   huddleNumber: string | null;
 };
 
+// "+16282647648" -> "(628) 264-7648"; other countries stay in + format.
+function displayNumber(e164: string): string {
+  const us = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(e164);
+  return us ? `(${us[1]}) ${us[2]}-${us[3]}` : e164;
+}
+
 function validate(f: Fields): Errors {
   const errors: Errors = {};
   if (!f.firstName.trim()) errors.firstName = "Enter your first name.";
@@ -95,7 +101,7 @@ export default function SignupForm() {
         ) : (
           <p className={s.body}>
             One last step: text Huddle from this phone
-            {result.huddleNumber ? ` at ${result.huddleNumber}` : ""}. Huddle
+            {result.huddleNumber ? ` at ${displayNumber(result.huddleNumber)}` : ""}. Huddle
             only texts people who texted it first, so say hi and we&apos;ll
             take it from there.
           </p>

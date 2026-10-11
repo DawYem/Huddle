@@ -57,7 +57,11 @@ Returns `{ ok: true }`.
 
 ### `POST /api/fans`
 
-The website sign-up. Body: `{ firstName, lastName, phone, email }`. `phone` can be typed any common way ("(404) 555-0123"); it is stored as E.164 (`+14045550123`), the handle iMessage uses, with US/Canada assumed when there is no country code. Returns 201 for a new fan, 200 for an update, or 400 with per-field messages in `fields`. The response includes `textedHuddle` and `huddleNumber` (from `HUDDLE_NUMBER`) so the site can ask the fan to send the first text.
+The website sign-up. Body: `{ firstName, lastName, phone, email }`. `phone` can be typed any common way ("(404) 555-0123"); it is stored as E.164 (`+14045550123`), the handle iMessage uses, with US/Canada assumed when there is no country code. Returns 201 for a new fan, 200 for an update, or 400 with per-field messages in `fields`.
+
+When `SPECTRUM_PROJECT_ID`/`SPECTRUM_PROJECT_SECRET` are set, the same four fields are also sent to Photon's [Create user](https://photon.codes/docs/api-reference/users/create-user) API, so the fan appears in the Photon dashboard's **Users** list (`firstName`, `lastName`, `phoneNumber`, `email`). On the shared plan Photon only delivers to registered users, so this is what lets the agent text them. Signing up again updates that user. The sign-up is saved locally first; if Photon fails, the error is logged, `spectrumSynced` is `false`, and the next sign-up retries.
+
+The response includes `textedHuddle` and `huddleNumber`: the number Photon assigned the fan, or `HUDDLE_NUMBER` as a fallback, so the site can ask them to send the first text. Set `SPECTRUM_USER_TYPE=dedicated` on the Business plan, which registers fans against the `HUDDLE_NUMBER` line.
 
 ### `GET /api/games`
 
