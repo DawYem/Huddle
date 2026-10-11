@@ -132,6 +132,10 @@ const guard = new ReplyGuard();
 
 for await (const [space, message] of app.messages) {
   const handle = message.platform === 'terminal' ? terminalHandle : message.sender?.id;
+  // One line per inbound event (number masked), so "is anything arriving?" is answerable.
+  if (message.content.type !== 'typing') {
+    console.log(`[huddle] <- ${message.content.type} from ${handle ? handle.replace(/.(?=.{4})/g, '•') : 'unknown'}`);
+  }
   if (!handle) continue;
   // Read receipts, typing, reactions etc. also arrive here. Only texts, poll
   // taps and shared locations get a reply.
